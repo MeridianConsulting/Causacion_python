@@ -25,7 +25,6 @@ def run_console_mode():
     processor = ExcelProcessor()
     
     try:
-        # Ejemplo de uso básico
         input_file = Config.INPUT_PATH / "archivo_entrada.xlsx"
         output_file = Config.OUTPUT_PATH / "archivo_procesado.xlsx"
         

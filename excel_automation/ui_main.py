@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt, QThread, Signal, QMimeData, QUrl
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QFont, QPalette, QColor, QDragMoveEvent
 
 from .excel_processor import ExcelProcessor
+from .causacion_processor import CausacionProcessor
 
 class DropArea(QWidget):
     """Widget interno para el área de drag & drop"""
@@ -321,59 +322,126 @@ class DropZone(QWidget):
         self.setLayout(layout)
 
 class ProcessingThread(QThread):
-    """Hilo para procesar archivos sin bloquear la UI"""
+    """Hilo para procesar archivos de causación sin bloquear la UI"""
     
     progress = Signal(str)
-    finished = Signal(bool, str)
+    finished = Signal(bool, str, dict)  # Agregar estadísticas al signal
     
-    def __init__(self, token_file: str, movement_file: str):
+    def __init__(self, dian_file: str, contable_file: str):
         super().__init__()
-        self.token_file = token_file
-        self.movement_file = movement_file
+        self.dian_file = dian_file
+        self.contable_file = contable_file
+        self.stats = {}
+        self._is_running = False
         
     def run(self):
-        """Ejecutar el procesamiento"""
+        """Ejecutar el procesamiento de causación completo"""
+        self._is_running = True
         try:
-            processor = ExcelProcessor()
+            # Inicializar procesador de causación
+            self.progress.emit("🔧 Inicializando procesador de causación...")
+            processor = CausacionProcessor()
             
-            self.progress.emit("Leyendo archivo Token DIAN...")
-            token_df = processor.read_excel(Path(self.token_file))
+            # Cargar archivo DIAN
+            self.progress.emit("📄 Cargando archivo DIAN...")
+            dian_df = processor.load_dian_file(self.dian_file)
+            self.progress.emit(f"✅ Archivo DIAN cargado: {len(dian_df)} registros")
             
-            self.progress.emit("Leyendo archivo Movimiento Contable...")
-            movement_df = processor.read_excel(Path(self.movement_file))
+            # Cargar archivo contable
+            self.progress.emit("📄 Cargando archivo contable...")
+            contable_df = processor.load_contable_file(self.contable_file)
+            self.progress.emit(f"✅ Archivo contable cargado: {len(contable_df)} registros")
             
-            self.progress.emit("Procesando datos...")
-            # Aquí puedes agregar tu lógica específica de procesamiento
-            processed_token = processor.process_data(token_df)
-            processed_movement = processor.process_data(movement_df)
+            # Validar archivos
+            self.progress.emit("🔍 Validando archivos...")
+            is_valid, errors = processor.validate_files()
+            if not is_valid:
+                raise Exception(f"Error en validación: {', '.join(errors)}")
+            self.progress.emit("✅ Archivos validados correctamente")
             
-            self.progress.emit("Guardando resultados...")
+            # Realizar matching de datos
+            self.progress.emit("🔗 Realizando cruce de datos...")
+            matching_result = processor.perform_data_matching(dian_df, contable_df)
+            matches_df = matching_result['matches']
+            non_matches_df = matching_result['non_matches']
+            self.progress.emit(f"✅ Cruce completado: {len(matches_df)} coincidencias, {len(non_matches_df)} no coincidencias")
+            
+            # Generar DataFrames estructurados
+            self.progress.emit("📊 Generando DataFrames de resultado...")
+            coincidencias_df = processor.create_coincidencias_dataframe(matches_df)
+            no_coincidencias_df = processor.create_no_coincidencias_dataframe(non_matches_df)
+            self.progress.emit("✅ DataFrames estructurados creados")
+            
+            # Calcular estadísticas
+            self.progress.emit("📈 Calculando estadísticas...")
+            stats = processor.calculate_statistics(coincidencias_df, no_coincidencias_df)
+            self.stats = stats
+            self.progress.emit(f"✅ Estadísticas calculadas - Calidad: {stats['resumen_ejecutivo']['calidad_general']}")
+            
+            # Crear archivo Excel con formato avanzado
+            self.progress.emit("📋 Creando archivo Excel profesional...")
             from config import Config
+            output_dir = Config.OUTPUT_PATH
+            output_dir.mkdir(exist_ok=True)
             
-            output_token = Config.OUTPUT_PATH / "token_dian_procesado.xlsx"
-            output_movement = Config.OUTPUT_PATH / "movimiento_contable_procesado.xlsx"
+            excel_path = processor.create_excel_file(
+                coincidencias_df=coincidencias_df,
+                no_coincidencias_df=no_coincidencias_df,
+                output_path=output_dir,
+                stats=stats
+            )
             
-            processor.write_excel(processed_token, output_token, "Token_DIAN")
-            processor.write_excel(processed_movement, output_movement, "Movimiento_Contable")
+            self.progress.emit(f"✅ Archivo Excel creado: {Path(excel_path).name}")
             
-            self.finished.emit(True, "Procesamiento completado exitosamente")
+            # Mensaje de éxito con estadísticas
+            success_message = (
+                f"Procesamiento de causación completado exitosamente\n\n"
+                f"📊 Resumen:\n"
+                f"• Total procesado: {stats['total_registros']} registros\n"
+                f"• Coincidencias: {stats['total_coincidencias']} ({stats['porcentaje_coincidencias']:.1f}%)\n"
+                f"• No coincidencias: {stats['total_no_coincidencias']} ({stats['porcentaje_no_coincidencias']:.1f}%)\n"
+                f"• Calidad general: {stats['resumen_ejecutivo']['calidad_general']}\n"
+                f"• Archivo generado: {Path(excel_path).name}"
+            )
+            
+            self.finished.emit(True, success_message, stats)
             
         except Exception as e:
-            self.finished.emit(False, f"Error durante el procesamiento: {str(e)}")
+            error_message = f"Error durante el procesamiento de causación: {str(e)}"
+            self.progress.emit(f"❌ {error_message}")
+            self.finished.emit(False, error_message, {})
+        finally:
+            self._is_running = False
+    
+    def stop(self):
+        """Detener el hilo de forma segura"""
+        self._is_running = False
+        self.wait()  # Esperar a que termine
+    
+    def is_running(self):
+        """Verificar si el hilo está ejecutándose"""
+        return self._is_running
 
 class MainWindow(QMainWindow):
     """Ventana principal de la aplicación"""
     
     def __init__(self):
         super().__init__()
-        self.token_file = None
-        self.movement_file = None
+        self.dian_file = None
+        self.contable_file = None
         self.processing_thread = None
+        self.stats = {}
         self.setup_ui()
+    
+    def closeEvent(self, event):
+        """Manejar el cierre de la ventana"""
+        if self.processing_thread and self.processing_thread.is_running():
+            self.processing_thread.stop()
+        event.accept()
         
     def setup_ui(self):
         """Configurar la interfaz principal"""
-        self.setWindowTitle("Automatización Excel - Token DIAN & Movimiento Contable")
+        self.setWindowTitle("Sistema de Causación - DIAN & Contabilidad")
         self.setMinimumSize(800, 600)
         self.setStyleSheet("""
             QMainWindow {
@@ -410,7 +478,7 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(30, 30, 30, 30)
         
         # Título
-        title_label = QLabel("🔄 Automatización de Procesos Excel")
+        title_label = QLabel("🔗 Sistema de Causación DIAN-Contable")
         title_font = QFont()
         title_font.setPointSize(20)
         title_font.setBold(True)
@@ -422,22 +490,22 @@ class MainWindow(QMainWindow):
         drop_layout = QHBoxLayout()
         drop_layout.setSpacing(20)
         
-        # Zona de drop para Token DIAN
-        self.token_drop = DropZone(
-            "Token DIAN",
-            "Archivo con información de tokens DIAN"
+        # Zona de drop para Archivo DIAN
+        self.dian_drop = DropZone(
+            "Archivo DIAN",
+            "Archivo con facturas/registros DIAN"
         )
-        self.token_drop.file_dropped.connect(self.on_token_file_dropped)
+        self.dian_drop.file_dropped.connect(self.on_dian_file_dropped)
         
-        # Zona de drop para Movimiento Contable
-        self.movement_drop = DropZone(
-            "Movimiento Contable",
+        # Zona de drop para Archivo Contable
+        self.contable_drop = DropZone(
+            "Archivo Contable",
             "Archivo con movimientos contables"
         )
-        self.movement_drop.file_dropped.connect(self.on_movement_file_dropped)
+        self.contable_drop.file_dropped.connect(self.on_contable_file_dropped)
         
-        drop_layout.addWidget(self.token_drop)
-        drop_layout.addWidget(self.movement_drop)
+        drop_layout.addWidget(self.dian_drop)
+        drop_layout.addWidget(self.contable_drop)
         
         # Botón procesar
         self.process_btn = QPushButton("🚀 Procesar Archivos")
@@ -486,30 +554,30 @@ class MainWindow(QMainWindow):
         
         central_widget.setLayout(main_layout)
         
-    def on_token_file_dropped(self, file_path: str):
-        """Manejar archivo Token DIAN seleccionado"""
-        self.token_file = file_path
-        self.log_message(f"Token DIAN cargado: {Path(file_path).name}")
+    def on_dian_file_dropped(self, file_path: str):
+        """Manejar archivo DIAN seleccionado"""
+        self.dian_file = file_path
+        self.log_message(f"📄 Archivo DIAN cargado: {Path(file_path).name}")
         self.check_ready_to_process()
         
-    def on_movement_file_dropped(self, file_path: str):
-        """Manejar archivo Movimiento Contable seleccionado"""
-        self.movement_file = file_path
-        self.log_message(f"Movimiento Contable cargado: {Path(file_path).name}")
+    def on_contable_file_dropped(self, file_path: str):
+        """Manejar archivo contable seleccionado"""
+        self.contable_file = file_path
+        self.log_message(f"📄 Archivo contable cargado: {Path(file_path).name}")
         self.check_ready_to_process()
         
     def check_ready_to_process(self):
         """Verificar si ambos archivos están cargados"""
-        if self.token_file and self.movement_file:
+        if self.dian_file and self.contable_file:
             self.process_btn.setEnabled(True)
-            self.process_btn.setText("🚀 Procesar Archivos")
+            self.process_btn.setText("🚀 Iniciar Causación")
         else:
             self.process_btn.setEnabled(False)
             missing = []
-            if not self.token_file:
-                missing.append("Token DIAN")
-            if not self.movement_file:
-                missing.append("Movimiento Contable")
+            if not self.dian_file:
+                missing.append("Archivo DIAN")
+            if not self.contable_file:
+                missing.append("Archivo Contable")
             self.process_btn.setText(f"⏳ Faltan: {', '.join(missing)}")
             
     def log_message(self, message: str):
@@ -518,44 +586,71 @@ class MainWindow(QMainWindow):
         self.log_area.append(f"• {message}")
         
     def process_files(self):
-        """Iniciar el procesamiento de archivos"""
-        if not self.token_file or not self.movement_file:
+        """Iniciar el procesamiento de causación"""
+        if not self.dian_file or not self.contable_file:
             QMessageBox.warning(self, "Archivos faltantes", 
-                              "Por favor, selecciona ambos archivos antes de procesar.")
+                              "Por favor, selecciona ambos archivos antes de iniciar la causación.")
             return
             
         # Configurar UI para procesamiento
         self.process_btn.setEnabled(False)
+        self.process_btn.setText("⏳ Procesando...")
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)  # Barra de progreso indeterminada
         self.log_area.setVisible(True)
         self.log_area.clear()
         
         # Iniciar procesamiento en hilo separado
-        self.processing_thread = ProcessingThread(self.token_file, self.movement_file)
+        self.processing_thread = ProcessingThread(self.dian_file, self.contable_file)
         self.processing_thread.progress.connect(self.log_message)
         self.processing_thread.finished.connect(self.on_processing_finished)
         self.processing_thread.start()
         
-    def on_processing_finished(self, success: bool, message: str):
-        """Manejar finalización del procesamiento"""
+    def on_processing_finished(self, success: bool, message: str, stats: dict = {}):
+        """Manejar finalización del procesamiento de causación"""
         self.progress_bar.setVisible(False)
         self.process_btn.setEnabled(True)
-        self.process_btn.setText("🚀 Procesar Archivos")
+        self.process_btn.setText("🚀 Iniciar Causación")
         
         if success:
-            self.log_message("✅ " + message)
-            QMessageBox.information(self, "Éxito", message)
+            self.stats = stats
+            self.log_message("✅ Procesamiento de causación completado")
+            
+            # Mostrar estadísticas detalladas
+            if stats:
+                self.log_message("📊 Estadísticas del proceso:")
+                self.log_message(f"   • Total registros: {stats.get('total_registros', 0)}")
+                self.log_message(f"   • Coincidencias: {stats.get('total_coincidencias', 0)} ({stats.get('porcentaje_coincidencias', 0):.1f}%)")
+                self.log_message(f"   • No coincidencias: {stats.get('total_no_coincidencias', 0)} ({stats.get('porcentaje_no_coincidencias', 0):.1f}%)")
+                self.log_message(f"   • Calidad general: {stats.get('resumen_ejecutivo', {}).get('calidad_general', 'N/A')}")
+            
+            QMessageBox.information(self, "✅ Causación Completada", message)
         else:
-            self.log_message("❌ " + message)
-            QMessageBox.critical(self, "Error", message)
+            self.log_message("❌ Error en el procesamiento")
+            QMessageBox.critical(self, "❌ Error de Causación", message)
 
 def run_app():
-    """Ejecutar la aplicación"""
+    """Ejecutar la aplicación de causación"""
     app = QApplication(sys.argv)
-    app.setApplicationName("Automatización Excel")
-    app.setApplicationVersion("1.0.0")
+    app.setApplicationName("Sistema de Causación DIAN-Contable")
+    app.setApplicationVersion("2.0.0")
     
+    # Configurar información de la aplicación
+    app.setOrganizationName("Sistema de Causación")
+    app.setOrganizationDomain("causacion.com")
+    
+    # Validar dependencias
+    try:
+        from .causacion_processor import CausacionProcessor
+        processor = CausacionProcessor()
+        print("✅ Procesador de causación inicializado correctamente")
+    except Exception as e:
+        print(f"❌ Error al inicializar procesador de causación: {e}")
+        QMessageBox.critical(None, "Error de Inicialización", 
+                           f"No se pudo inicializar el procesador de causación:\n{str(e)}")
+        return 1
+    
+    # Crear y mostrar ventana principal
     window = MainWindow()
     window.show()
     
