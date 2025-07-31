@@ -2088,20 +2088,20 @@ class CausacionProcessor:
             with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
                 # Crear hojas básicas con openpyxl (más simple y estable)
                 try:
-                    # Crear hoja de coincidencias
-                    if not coincidencias_df.empty:
-                        coincidencias_df.to_excel(writer, sheet_name='Coincidencias', index=False)
-                    
-                    # Crear hoja de no coincidencias
-                    if not no_coincidencias_df.empty:
-                        no_coincidencias_df.to_excel(writer, sheet_name='No_coincidencias', index=False)
-                    
-                    # Crear hoja de resumen básica
+                    # PRIMERO: Crear hoja de resumen (será la primera hoja visible)
                     if stats:
                         self._create_simple_summary_sheet(writer, stats)
                     
-                    # Aplicar formato mejorado a las hojas
-                    self._apply_enhanced_formatting(writer, coincidencias_df, no_coincidencias_df)
+                    # SEGUNDO: Crear hoja de coincidencias
+                    if not coincidencias_df.empty:
+                        coincidencias_df.to_excel(writer, sheet_name='Coincidencias', index=False)
+                    
+                    # TERCERO: Crear hoja de no coincidencias
+                    if not no_coincidencias_df.empty:
+                        no_coincidencias_df.to_excel(writer, sheet_name='No_coincidencias', index=False)
+                    
+                    # Aplicar formato mejorado a TODAS las hojas (incluyendo Resumen)
+                    self._apply_enhanced_formatting_all_sheets(writer, coincidencias_df, no_coincidencias_df, stats)
                     
                     self.logger.info("Excel creado con formato básico usando openpyxl")
                     
@@ -2111,6 +2111,10 @@ class CausacionProcessor:
                     raise e
             
             self.logger.info(f"Archivo Excel creado exitosamente: {output_path}")
+            
+            # Abrir automáticamente el archivo Excel
+            self._open_excel_file(output_path)
+            
             return str(output_path)
             
         except Exception as e:
@@ -2119,6 +2123,10 @@ class CausacionProcessor:
             try:
                 self.logger.info("Intentando crear archivo Excel básico como fallback...")
                 self._create_basic_excel_emergency(coincidencias_df, no_coincidencias_df, output_path)
+                
+                # Abrir automáticamente el archivo Excel (fallback)
+                self._open_excel_file(output_path)
+                
                 return str(output_path)
             except Exception as fallback_error:
                 self.logger.error(f"Error en fallback: {fallback_error}")
@@ -2371,44 +2379,43 @@ class CausacionProcessor:
 
     def _create_simple_summary_sheet(self, writer, stats: Dict[str, Any]):
         """
-        Crear hoja de resumen simple
+        Crear hoja de resumen simplificada con datos básicos
         
         Args:
             writer: ExcelWriter object
             stats: Estadísticas del proceso
         """
         try:
-            # Crear datos de resumen básicos
+            # Calcular solo los datos básicos esenciales
             total_coincidencias = stats.get('total_coincidencias', 0)
             total_no_coincidencias = stats.get('total_no_coincidencias', 0)
             total_registros = total_coincidencias + total_no_coincidencias
             
             tasa_matching = (total_coincidencias / total_registros * 100) if total_registros > 0 else 0
             
+            # Datos básicos del resumen - solo lo esencial
             summary_data = {
                 'Métrica': [
+                    'Total de Registros Procesados',
                     'Total de Coincidencias',
                     'Total de No Coincidencias',
-                    'Total de Registros',
-                    'Tasa de Matching (%)',
-                    'Fecha de Proceso'
+                    'Tasa de Matching (%)'
                 ],
                 'Valor': [
+                    total_registros,
                     total_coincidencias,
                     total_no_coincidencias,
-                    total_registros,
-                    f"{tasa_matching:.2f}%",
-                    datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+                    f"{tasa_matching:.2f}%"
                 ]
             }
             
             summary_df = pd.DataFrame(summary_data)
             summary_df.to_excel(writer, sheet_name='Resumen', index=False)
             
-            self.logger.info("Hoja de resumen simple creada exitosamente")
+            self.logger.info("Hoja de resumen simplificada creada exitosamente")
             
         except Exception as e:
-            self.logger.error(f"Error creando resumen simple: {e}")
+            self.logger.error(f"Error creando resumen: {e}")
 
     def _create_simple_metadata_sheet(self, writer):
         """
@@ -2444,20 +2451,25 @@ class CausacionProcessor:
         except Exception as e:
             self.logger.error(f"Error creando metadatos simples: {e}")
 
-    def _apply_enhanced_formatting(self, writer, coincidencias_df: pd.DataFrame, no_coincidencias_df: pd.DataFrame):
+    def _apply_enhanced_formatting_all_sheets(self, writer, coincidencias_df: pd.DataFrame, no_coincidencias_df: pd.DataFrame, stats: Dict[str, Any] = None):
         """
-        Aplicar formato mejorado a las hojas de Excel usando openpyxl
+        Aplicar formato mejorado a TODAS las hojas de Excel usando openpyxl
         
         Args:
             writer: ExcelWriter object con engine openpyxl
             coincidencias_df: DataFrame de coincidencias
             no_coincidencias_df: DataFrame de no coincidencias
+            stats: Estadísticas del proceso
         """
         try:
-            self.logger.info("Aplicando formato mejorado a las hojas")
+            self.logger.info("Aplicando formato mejorado a todas las hojas")
             
             # Acceder al workbook de openpyxl
             workbook = writer.book
+            
+            # Aplicar formato a la hoja de Resumen (PRIMERA hoja)
+            if 'Resumen' in workbook.sheetnames and stats:
+                self._format_summary_sheet(workbook['Resumen'], stats)
             
             # Aplicar formato a la hoja de Coincidencias
             if 'Coincidencias' in workbook.sheetnames and not coincidencias_df.empty:
@@ -2467,10 +2479,22 @@ class CausacionProcessor:
             if 'No_coincidencias' in workbook.sheetnames and not no_coincidencias_df.empty:
                 self._format_sheet_as_table(workbook['No_coincidencias'], no_coincidencias_df, 'No_coincidencias')
                 
-            self.logger.info("Formato mejorado aplicado exitosamente")
+            self.logger.info("Formato mejorado aplicado exitosamente a todas las hojas")
             
         except Exception as e:
             self.logger.warning(f"Error aplicando formato mejorado: {e}, continuando con formato básico")
+
+    def _apply_enhanced_formatting(self, writer, coincidencias_df: pd.DataFrame, no_coincidencias_df: pd.DataFrame):
+        """
+        Aplicar formato mejorado a las hojas de Excel usando openpyxl (función legacy)
+        
+        Args:
+            writer: ExcelWriter object con engine openpyxl
+            coincidencias_df: DataFrame de coincidencias
+            no_coincidencias_df: DataFrame de no coincidencias
+        """
+        # Delegamos a la nueva función más completa
+        self._apply_enhanced_formatting_all_sheets(writer, coincidencias_df, no_coincidencias_df)
 
     def _format_sheet_as_table(self, worksheet, df: pd.DataFrame, sheet_name: str):
         """
@@ -2523,8 +2547,9 @@ class CausacionProcessor:
                 end_row = len(df) + 1  # +1 para incluir el encabezado
                 table_range = f"A1:{end_col_letter}{end_row}"
                 
-                # Crear la tabla
-                table = Table(displayName=f"Tabla_{sheet_name}", ref=table_range)
+                # Crear la tabla con nombre más simple
+                table_name = f"Tabla{sheet_name.replace('_', '')}"  # Eliminar caracteres especiales
+                table = Table(displayName=table_name, ref=table_range)
                 
                 # Aplicar estilo de tabla
                 style = TableStyleInfo(
@@ -2573,6 +2598,132 @@ class CausacionProcessor:
                         worksheet.column_dimensions[col_letter].width = 20
             except Exception as basic_error:
                 self.logger.warning(f"Error aplicando formato básico: {basic_error}")
+
+    def _format_summary_sheet(self, worksheet, stats: Dict[str, Any]):
+        """
+        Aplicar formato profesional especial a la hoja de Resumen
+        
+        Args:
+            worksheet: Worksheet de openpyxl
+            stats: Estadísticas del proceso
+        """
+        try:
+            from openpyxl.utils import get_column_letter
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.worksheet.table import Table, TableStyleInfo
+            
+            # Definir estilos
+            header_font = Font(bold=True, color="FFFFFF", size=12)
+            header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+            
+            section_font = Font(bold=True, color="2E5984", size=11)
+            section_fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
+            
+            data_font = Font(size=10)
+            value_font = Font(size=10, bold=True)
+            
+            # Estilo de borde
+            thin_border = Border(
+                left=Side(style='thin', color='C0C0C0'),
+                right=Side(style='thin', color='C0C0C0'),
+                top=Side(style='thin', color='C0C0C0'),
+                bottom=Side(style='thin', color='C0C0C0')
+            )
+            
+            # Configurar anchos de columnas optimizados
+            worksheet.column_dimensions['A'].width = 45  # Columna de métricas más ancha
+            worksheet.column_dimensions['B'].width = 25  # Columna de valores
+            
+            # Aplicar formato a los encabezados (fila 1)
+            header_cell_a = worksheet.cell(row=1, column=1)
+            header_cell_b = worksheet.cell(row=1, column=2)
+            
+            header_cell_a.font = header_font
+            header_cell_a.fill = header_fill
+            header_cell_a.alignment = Alignment(horizontal="center", vertical="center")
+            header_cell_a.border = thin_border
+            
+            header_cell_b.font = header_font
+            header_cell_b.fill = header_fill
+            header_cell_b.alignment = Alignment(horizontal="center", vertical="center")
+            header_cell_b.border = thin_border
+            
+            # Obtener número total de filas con datos
+            max_row = worksheet.max_row
+            
+            # Aplicar formato a todas las celdas de datos
+            for row in range(2, max_row + 1):
+                cell_a = worksheet.cell(row=row, column=1)
+                cell_b = worksheet.cell(row=row, column=2)
+                
+                # Obtener el texto de la métrica para determinar el formato
+                metric_text = str(cell_a.value) if cell_a.value else ""
+                
+                if 'REPORTE DE CAUSACIÓN' in metric_text:
+                    # Es el título principal
+                    cell_a.font = Font(bold=True, size=14, color="1F4E79")
+                    cell_a.alignment = Alignment(horizontal="center", vertical="center")
+                    cell_b.alignment = Alignment(horizontal="center", vertical="center")
+                    # Combinar celdas para el título
+                    try:
+                        worksheet.merge_cells(f'A{row}:B{row}')
+                    except:
+                        pass  # Si ya está combinada, continuar
+                elif metric_text.startswith('==='):
+                    # Es un separador/encabezado de sección
+                    cell_a.font = section_font
+                    cell_a.fill = section_fill
+                    cell_a.alignment = Alignment(horizontal="left", vertical="center")
+                    cell_b.font = section_font
+                    cell_b.fill = section_fill
+                    cell_b.alignment = Alignment(horizontal="center", vertical="center")
+                elif metric_text.strip() == "":
+                    # Es una fila separadora vacía
+                    cell_a.fill = PatternFill(start_color="F8F8F8", end_color="F8F8F8", fill_type="solid")
+                    cell_b.fill = PatternFill(start_color="F8F8F8", end_color="F8F8F8", fill_type="solid")
+                else:
+                    # Es una fila de datos normal
+                    cell_a.font = data_font
+                    cell_a.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                    cell_b.font = value_font
+                    cell_b.alignment = Alignment(horizontal="right", vertical="center")
+                    
+                    # Colorear filas alternas para mejor legibilidad
+                    if row % 2 == 0:
+                        fill_color = "F8F9FA"
+                    else:
+                        fill_color = "FFFFFF"
+                    
+                    cell_a.fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
+                    cell_b.fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
+                
+                # Aplicar bordes a todas las celdas
+                cell_a.border = thin_border
+                cell_b.border = thin_border
+            
+            # NO crear tabla de Excel para evitar problemas de corrupción
+            # En su lugar, aplicar formato manual más seguro
+            
+            # Ajustar altura de las filas para mejor legibilidad
+            for row in range(1, max_row + 1):
+                # Buscar la fila del título y hacerla más alta
+                cell_value = str(worksheet.cell(row=row, column=1).value or "")
+                if 'REPORTE DE CAUSACIÓN' in cell_value:
+                    worksheet.row_dimensions[row].height = 35  # Título más alto
+                else:
+                    worksheet.row_dimensions[row].height = 25  # Filas normales
+            
+            self.logger.info("Formato profesional aplicado a la hoja de Resumen")
+            
+        except Exception as e:
+            self.logger.warning(f"Error formateando hoja de resumen: {e}, aplicando formato básico")
+            # Formato básico como fallback
+            try:
+                from openpyxl.utils import get_column_letter
+                worksheet.column_dimensions['A'].width = 40
+                worksheet.column_dimensions['B'].width = 20
+            except Exception as basic_error:
+                self.logger.warning(f"Error aplicando formato básico a resumen: {basic_error}")
 
     def _create_coincidencias_sheet(self, writer, coincidencias_df: pd.DataFrame, formats: Dict[str, Any]):
         """
@@ -2755,7 +2906,7 @@ class CausacionProcessor:
 
     def _create_summary_sheet(self, writer, stats: Dict[str, Any], formats: Dict[str, Any]):
         """
-        Crear hoja de resumen con estadísticas
+        Crear hoja de resumen simplificada con estadísticas básicas
         
         Args:
             writer: ExcelWriter object
@@ -2765,28 +2916,16 @@ class CausacionProcessor:
         worksheet = writer.book.add_worksheet('Resumen')
         
         # Aplicar formato básico
-        self._apply_basic_formatting(worksheet, 'RESUMEN EJECUTIVO', 
-                                   'Estadísticas del proceso de causación', formats)
+        self._apply_basic_formatting(worksheet, 'RESUMEN BÁSICO', 
+                                   'Estadísticas principales del proceso', formats)
         
-        # Escribir estadísticas principales
+        # Escribir solo estadísticas básicas
         start_row = 4
         summary_data = [
             ('Total de registros procesados', stats['total_registros']),
             ('Coincidencias encontradas', stats['total_coincidencias']),
             ('No coincidencias', stats['total_no_coincidencias']),
-            ('Porcentaje de coincidencias', f"{stats['porcentaje_coincidencias']:.1f}%"),
-            ('Porcentaje de no coincidencias', f"{stats['porcentaje_no_coincidencias']:.1f}%"),
-            ('', ''),
-            ('VALORES', ''),
-            ('Valor total coincidencias DIAN', f"${stats['valor_total_coincidencias']:,.2f}"),
-            ('Valor total coincidencias Contable', f"${stats['valor_total_contable_coincidencias']:,.2f}"),
-            ('Diferencia total de valores', f"${stats['diferencia_total_valores']:,.2f}"),
-            ('Porcentaje de diferencia', f"{stats['porcentaje_diferencia_valores']:.2f}%"),
-            ('', ''),
-            ('CALIDAD', ''),
-            ('Coincidencias exactas', stats['coincidencias_exactas']),
-            ('Coincidencias perfectas', stats['coincidencias_perfectas']),
-            ('Calidad general del proceso', stats['resumen_ejecutivo']['calidad_general'])
+            ('Tasa de Matching (%)', f"{stats['porcentaje_coincidencias']:.2f}%")
         ]
         
         for row_idx, (label, value) in enumerate(summary_data, start_row):
@@ -2971,9 +3110,8 @@ class CausacionProcessor:
             data_range: Rango de datos
         """
         try:
-            # Obtener rango de filas
-            start_row = int(data_range.split(":")[0].replace("A", ""))
-            end_row = int(data_range.split(":")[1].replace("O", ""))
+            # Obtener rango de filas de manera segura
+            start_row, end_row = self._extract_range_rows(data_range)
             
             # Crear formatos una sola vez para reutilizar
             format_green = workbook.add_format({
@@ -3136,9 +3274,8 @@ class CausacionProcessor:
             data_range: Rango de datos
         """
         try:
-            # Obtener rango de filas
-            start_row = int(data_range.split(":")[0].replace("A", ""))
-            end_row = int(data_range.split(":")[1].replace("L", ""))
+            # Obtener rango de filas de manera segura
+            start_row, end_row = self._extract_range_rows(data_range)
             
             # Crear formatos una sola vez para reutilizar
             format_dian = workbook.add_format({
@@ -3222,9 +3359,8 @@ class CausacionProcessor:
             data_range: Rango de datos
         """
         try:
-            # Obtener rango de filas para formato general
-            start_row = int(data_range.split(":")[0].replace("A", ""))
-            end_row = int(data_range.split(":")[1].split(":")[0][-1])
+            # Obtener rango de filas para formato general de manera segura
+            start_row, end_row = self._extract_range_rows(data_range)
             
             # Crear formato para celdas vacías
             format_blank = workbook.add_format({
@@ -3445,59 +3581,180 @@ class CausacionProcessor:
         try:
             self.logger.info("Agregando herramientas para contadores")
             
-            # Calcular posición para herramientas
-            start_row = int(data_range.split(":")[1].replace("O", "").replace("L", "")) + 10
+            # Calcular posición para herramientas de manera segura
+            _, end_row = self._extract_range_rows(data_range)
+            start_row = end_row + 10
             
-            # Agregar fórmulas de suma automática
-            self._add_summary_formulas(workbook, worksheet, data_range, start_row)
+            # FÓRMULAS DESACTIVADAS - Causaban problemas de compatibilidad con Excel
+            # self._add_summary_formulas(workbook, worksheet, data_range, start_row)
             
             # Agregar validaciones de datos
             self._add_data_validations(workbook, worksheet, data_range)
             
-            # Agregar alertas para discrepancias
-            self._add_discrepancy_alerts(workbook, worksheet, data_range, start_row + 5)
+            # ALERTAS Y ANÁLISIS DESACTIVADOS - Fórmulas problemáticas
+            # self._add_discrepancy_alerts(workbook, worksheet, data_range, start_row + 5)
+            # self._add_analysis_tools(workbook, worksheet, data_range, start_row + 10)
             
-            # Agregar herramientas de análisis
-            self._add_analysis_tools(workbook, worksheet, data_range, start_row + 10)
+            # En su lugar, agregar información estática sin fórmulas
+            self._add_static_summary_info(workbook, worksheet, start_row)
             
             self.logger.info("Herramientas para contadores agregadas exitosamente")
             
         except Exception as e:
             self.logger.error(f"Error al agregar herramientas para contadores: {e}")
 
+    def _add_static_summary_info(self, workbook, worksheet, start_row: int):
+        """
+        Agregar información de resumen estática sin fórmulas problemáticas
+        
+        Args:
+            workbook: Objeto workbook
+            worksheet: Objeto worksheet  
+            start_row: Fila donde empezar la información
+        """
+        try:
+            # Crear formatos
+            info_format = workbook.add_format({
+                'bold': True,
+                'font_color': '#0066cc',
+                'font_size': 11
+            })
+            
+            note_format = workbook.add_format({
+                'font_color': '#666666',
+                'font_size': 10,
+                'italic': True
+            })
+            
+            # Agregar información estática
+            worksheet.write(start_row, 0, 'INFORMACIÓN DEL REPORTE:', info_format)
+            worksheet.write(start_row + 1, 0, '• Los cálculos se realizan automáticamente durante el procesamiento', note_format)
+            worksheet.write(start_row + 2, 0, '• Para estadísticas detalladas, consulte las hojas Coincidencias y No_coincidencias', note_format)
+            worksheet.write(start_row + 3, 0, '• Las validaciones de datos están activas en las columnas de valores y fechas', note_format)
+            worksheet.write(start_row + 4, 0, '• Reporte generado sin fórmulas para máxima compatibilidad', note_format)
+            
+            self.logger.info("Información de resumen estática agregada exitosamente")
+            
+        except Exception as e:
+            self.logger.warning(f"Error agregando información de resumen estática: {e}")
+
+    def _extract_range_rows(self, data_range: str) -> tuple[int, int]:
+        """
+        Extraer números de fila de un rango de celdas de manera segura
+        
+        Args:
+            data_range: Rango como "A2:L100"
+            
+        Returns:
+            tuple: (fila_inicio, fila_fin)
+        """
+        import re
+        try:
+            # Extraer números usando regex
+            matches = re.findall(r'\d+', data_range)
+            if len(matches) >= 2:
+                return int(matches[0]), int(matches[-1])
+            elif len(matches) == 1:
+                # Si solo hay un número, usar como inicio y fin
+                row_num = int(matches[0])
+                return row_num, row_num
+            else:
+                # Fallback si no se encuentran números
+                self.logger.warning(f"No se pudieron extraer números de fila del rango: {data_range}")
+                return 2, 100  # Valores por defecto
+        except Exception as e:
+            self.logger.error(f"Error al extraer rango de filas: {e}")
+            return 2, 100  # Valores por defecto
+
     def _add_summary_formulas(self, workbook, worksheet, data_range: str, start_row: int):
         """
-        Agregar fórmulas de suma automática
+        FUNCIÓN DESACTIVADA - Las fórmulas causaban problemas de compatibilidad con Excel
         
         Args:
             worksheet: Objeto worksheet
             data_range: Rango de datos
             start_row: Fila donde empezar las fórmulas
         """
-        # Fórmula para suma total de valores DIAN
-        worksheet.write(start_row, 0, 'SUMA TOTAL VALORES DIAN:', self._get_info_format(workbook))
-        worksheet.write_formula(start_row, 1, f'=SUM(C{data_range.split(":")[0].replace("A", "")}:C{data_range.split(":")[1].replace("O", "").replace("L", "")})', 
-                               self._get_number_format(workbook))
+        # TODAS LAS FÓRMULAS HAN SIDO DESACTIVADAS PARA EVITAR PROBLEMAS DE COMPATIBILIDAD
+        self.logger.info("Función _add_summary_formulas desactivada - se usa información estática en su lugar")
+        return
         
-        # Fórmula para suma total de valores contables
-        worksheet.write(start_row + 1, 0, 'SUMA TOTAL VALORES CONTABLES:', self._get_info_format(workbook))
-        worksheet.write_formula(start_row + 1, 1, f'=SUM(H{data_range.split(":")[0].replace("A", "")}:H{data_range.split(":")[1].replace("O", "").replace("L", "")})', 
-                               self._get_number_format(workbook))
+        # CÓDIGO COMENTADO - FÓRMULAS PROBLEMÁTICAS
+        # # Extraer números de fila de manera segura
+        # start_data_row, end_data_row = self._extract_range_rows(data_range)
+        # 
+        # # Fórmula para suma total de valores DIAN
+        # worksheet.write(start_row, 0, 'SUMA TOTAL VALORES DIAN:', self._get_info_format(workbook))
+        # worksheet.write_formula(start_row, 1, f'=SUM(C{start_data_row}:C{end_data_row})', 
+        #                        self._get_number_format(workbook))
+        # 
+        # # Fórmula para suma total de valores contables
+        # worksheet.write(start_row + 1, 0, 'SUMA TOTAL VALORES CONTABLES:', self._get_info_format(workbook))
+        # worksheet.write_formula(start_row + 1, 1, f'=SUM(H{start_data_row}:H{end_data_row})', 
+        #                        self._get_number_format(workbook))
+        # 
+        # # Fórmula para diferencia total (corregida: resta la fila anterior de la actual)
+        # worksheet.write(start_row + 2, 0, 'DIFERENCIA TOTAL:', self._get_info_format(workbook))
+        # worksheet.write_formula(start_row + 2, 1, f'=B{start_row + 1}-B{start_row + 2}', 
+        #                        self._get_number_format(workbook))
+        # 
+        # # Fórmula para promedio de valores
+        # worksheet.write(start_row + 3, 0, 'PROMEDIO VALORES:', self._get_info_format(workbook))
+        # worksheet.write_formula(start_row + 3, 1, f'=AVERAGE(C{start_data_row}:C{end_data_row})', 
+        #                        self._get_number_format(workbook))
+        # 
+        # # Fórmula para conteo de registros
+        # worksheet.write(start_row + 4, 0, 'TOTAL REGISTROS:', self._get_info_format(workbook))
+        # worksheet.write_formula(start_row + 4, 1, f'=COUNTA(A{start_data_row}:A{end_data_row})', 
+        #                        self._get_number_format(workbook))
+
+    def _open_excel_file(self, file_path: str | Path):
+        """
+        Abrir automáticamente el archivo Excel generado
         
-        # Fórmula para diferencia total
-        worksheet.write(start_row + 2, 0, 'DIFERENCIA TOTAL:', self._get_info_format(workbook))
-        worksheet.write_formula(start_row + 2, 1, f'=B{start_row + 1}-B{start_row + 2}', 
-                               self._get_number_format(workbook))
-        
-        # Fórmula para promedio de valores
-        worksheet.write(start_row + 3, 0, 'PROMEDIO VALORES:', self._get_info_format(workbook))
-        worksheet.write_formula(start_row + 3, 1, f'=AVERAGE(C{data_range.split(":")[0].replace("A", "")}:C{data_range.split(":")[1].replace("O", "").replace("L", "")})', 
-                               self._get_number_format(workbook))
-        
-        # Fórmula para conteo de registros
-        worksheet.write(start_row + 4, 0, 'TOTAL REGISTROS:', self._get_info_format(workbook))
-        worksheet.write_formula(start_row + 4, 1, f'=COUNTA(A{data_range.split(":")[0].replace("A", "")}:A{data_range.split(":")[1].replace("O", "").replace("L", "")})', 
-                               self._get_number_format(workbook))
+        Args:
+            file_path: Ruta del archivo Excel a abrir
+        """
+        try:
+            import os
+            import subprocess
+            import platform
+            
+            file_path = Path(file_path)
+            
+            if not file_path.exists():
+                self.logger.warning(f"No se puede abrir el archivo, no existe: {file_path}")
+                return False
+            
+            self.logger.info(f"Abriendo archivo Excel automáticamente: {file_path}")
+            
+            # Detectar el sistema operativo y usar el comando apropiado
+            system = platform.system().lower()
+            
+            if system == "windows":
+                # En Windows, usar el comando start
+                subprocess.run(['start', '', str(file_path)], shell=True, check=False)
+                
+            elif system == "darwin":  # macOS
+                # En macOS, usar el comando open
+                subprocess.run(['open', str(file_path)], check=False)
+                
+            elif system == "linux":
+                # En Linux, usar xdg-open
+                subprocess.run(['xdg-open', str(file_path)], check=False)
+                
+            else:
+                # Sistema no reconocido, intentar con webbrowser como fallback
+                import webbrowser
+                webbrowser.open(f"file://{file_path}")
+            
+            self.logger.info("Archivo Excel abierto exitosamente")
+            return True
+            
+        except Exception as e:
+            self.logger.warning(f"No se pudo abrir automáticamente el archivo Excel: {e}")
+            self.logger.info(f"El archivo se encuentra en: {file_path}")
+            return False
 
     def _add_data_validations(self, workbook, worksheet, data_range: str):
         """
@@ -3508,9 +3765,12 @@ class CausacionProcessor:
             data_range: Rango de datos
         """
         try:
+            # Extraer números de fila de manera segura
+            start_data_row, end_data_row = self._extract_range_rows(data_range)
+            
             # Validación para valores numéricos positivos
             worksheet.data_validation(
-                f'C{data_range.split(":")[0].replace("A", "")}:C{data_range.split(":")[1].replace("O", "").replace("L", "")}',
+                f'C{start_data_row}:C{end_data_row}',
                 {
                     'validate': 'decimal',
                     'criteria': '>=',
@@ -3524,7 +3784,7 @@ class CausacionProcessor:
             
             # Validación para fechas
             worksheet.data_validation(
-                f'B{data_range.split(":")[0].replace("A", "")}:B{data_range.split(":")[1].replace("O", "").replace("L", "")}',
+                f'B{start_data_row}:B{end_data_row}',
                 {
                     'validate': 'date',
                     'criteria': 'between',
@@ -3542,69 +3802,85 @@ class CausacionProcessor:
 
     def _add_discrepancy_alerts(self, workbook, worksheet, data_range: str, start_row: int):
         """
-        Agregar alertas para discrepancias
+        FUNCIÓN DESACTIVADA - Las fórmulas causaban problemas de compatibilidad con Excel
         
         Args:
             worksheet: Objeto worksheet
             data_range: Rango de datos
             start_row: Fila donde empezar las alertas
         """
-        # Alerta para diferencias de valor mayores a 10%
-        worksheet.write(start_row, 0, 'ALERTAS DE DISCREPANCIAS:', self._get_alert_format(workbook))
+        # TODAS LAS FÓRMULAS HAN SIDO DESACTIVADAS PARA EVITAR PROBLEMAS DE COMPATIBILIDAD
+        self.logger.info("Función _add_discrepancy_alerts desactivada - fórmulas problemáticas")
+        return
         
-        # Contar registros con diferencias significativas
-        worksheet.write(start_row + 1, 0, 'Registros con diferencia > 10%:', self._get_info_format(workbook))
-        worksheet.write_formula(start_row + 1, 1, 
-                               f'=COUNTIF(K{data_range.split(":")[0].replace("A", "")}:K{data_range.split(":")[1].replace("O", "").replace("L", "")},">10")', 
-                               self._get_number_format(workbook))
-        
-        # Contar registros con diferencias de fecha > 7 días
-        worksheet.write(start_row + 2, 0, 'Registros con diferencia fecha > 7 días:', self._get_info_format(workbook))
-        worksheet.write_formula(start_row + 2, 1, 
-                               f'=COUNTIF(L{data_range.split(":")[0].replace("A", "")}:L{data_range.split(":")[1].replace("O", "").replace("L", "")},">7")', 
-                               self._get_number_format(workbook))
-        
-        # Contar registros con nivel de confianza bajo
-        worksheet.write(start_row + 3, 0, 'Registros con confianza < 0.7:', self._get_info_format(workbook))
-        worksheet.write_formula(start_row + 3, 1, 
-                               f'=COUNTIF(O{data_range.split(":")[0].replace("A", "")}:O{data_range.split(":")[1].replace("O", "").replace("L", "")},"<0.7")', 
-                               self._get_number_format(workbook))
+        # CÓDIGO COMENTADO - FÓRMULAS PROBLEMÁTICAS
+        # # Extraer números de fila de manera segura
+        # start_data_row, end_data_row = self._extract_range_rows(data_range)
+        # 
+        # # Alerta para diferencias de valor mayores a 10%
+        # worksheet.write(start_row, 0, 'ALERTAS DE DISCREPANCIAS:', self._get_alert_format(workbook))
+        # 
+        # # Contar registros con diferencias significativas
+        # worksheet.write(start_row + 1, 0, 'Registros con diferencia > 10%:', self._get_info_format(workbook))
+        # worksheet.write_formula(start_row + 1, 1, 
+        #                        f'=COUNTIF(K{start_data_row}:K{end_data_row},">10")', 
+        #                        self._get_number_format(workbook))
+        # 
+        # # Contar registros con diferencias de fecha > 7 días
+        # worksheet.write(start_row + 2, 0, 'Registros con diferencia fecha > 7 días:', self._get_info_format(workbook))
+        # worksheet.write_formula(start_row + 2, 1, 
+        #                        f'=COUNTIF(L{start_data_row}:L{end_data_row},">7")', 
+        #                        self._get_number_format(workbook))
+        # 
+        # # Contar registros con nivel de confianza bajo
+        # worksheet.write(start_row + 3, 0, 'Registros con confianza < 0.7:', self._get_info_format(workbook))
+        # worksheet.write_formula(start_row + 3, 1, 
+        #                        f'=COUNTIF(O{start_data_row}:O{end_data_row},"<0.7")', 
+        #                        self._get_number_format(workbook))
 
     def _add_analysis_tools(self, workbook, worksheet, data_range: str, start_row: int):
         """
-        Agregar herramientas de análisis
+        FUNCIÓN DESACTIVADA - Las fórmulas causaban problemas de compatibilidad con Excel
         
         Args:
             worksheet: Objeto worksheet
             data_range: Rango de datos
             start_row: Fila donde empezar las herramientas
         """
-        # Herramientas de análisis estadístico
-        worksheet.write(start_row, 0, 'HERRAMIENTAS DE ANÁLISIS:', self._get_alert_format(workbook))
+        # TODAS LAS FÓRMULAS HAN SIDO DESACTIVADAS PARA EVITAR PROBLEMAS DE COMPATIBILIDAD
+        self.logger.info("Función _add_analysis_tools desactivada - fórmulas problemáticas")
+        return
         
-        # Valor máximo
-        worksheet.write(start_row + 1, 0, 'Valor máximo DIAN:', self._get_info_format(workbook))
-        worksheet.write_formula(start_row + 1, 1, 
-                               f'=MAX(C{data_range.split(":")[0].replace("A", "")}:C{data_range.split(":")[1].replace("O", "").replace("L", "")})', 
-                               self._get_number_format(workbook))
-        
-        # Valor mínimo
-        worksheet.write(start_row + 2, 0, 'Valor mínimo DIAN:', self._get_info_format(workbook))
-        worksheet.write_formula(start_row + 2, 1, 
-                               f'=MIN(C{data_range.split(":")[0].replace("A", "")}:C{data_range.split(":")[1].replace("O", "").replace("L", "")})', 
-                               self._get_number_format(workbook))
-        
-        # Desviación estándar
-        worksheet.write(start_row + 3, 0, 'Desviación estándar DIAN:', self._get_info_format(workbook))
-        worksheet.write_formula(start_row + 3, 1, 
-                               f'=STDEV(C{data_range.split(":")[0].replace("A", "")}:C{data_range.split(":")[1].replace("O", "").replace("L", "")})', 
-                               self._get_number_format(workbook))
-        
-        # Mediana
-        worksheet.write(start_row + 4, 0, 'Mediana DIAN:', self._get_info_format(workbook))
-        worksheet.write_formula(start_row + 4, 1, 
-                               f'=MEDIAN(C{data_range.split(":")[0].replace("A", "")}:C{data_range.split(":")[1].replace("O", "").replace("L", "")})', 
-                               self._get_number_format(workbook))
+        # CÓDIGO COMENTADO - FÓRMULAS PROBLEMÁTICAS
+        # # Extraer números de fila de manera segura
+        # start_data_row, end_data_row = self._extract_range_rows(data_range)
+        # 
+        # # Herramientas de análisis estadístico
+        # worksheet.write(start_row, 0, 'HERRAMIENTAS DE ANÁLISIS:', self._get_alert_format(workbook))
+        # 
+        # # Valor máximo
+        # worksheet.write(start_row + 1, 0, 'Valor máximo DIAN:', self._get_info_format(workbook))
+        # worksheet.write_formula(start_row + 1, 1, 
+        #                        f'=MAX(C{start_data_row}:C{end_data_row})', 
+        #                        self._get_number_format(workbook))
+        # 
+        # # Valor mínimo
+        # worksheet.write(start_row + 2, 0, 'Valor mínimo DIAN:', self._get_info_format(workbook))
+        # worksheet.write_formula(start_row + 2, 1, 
+        #                        f'=MIN(C{start_data_row}:C{end_data_row})', 
+        #                        self._get_number_format(workbook))
+        # 
+        # # Desviación estándar
+        # worksheet.write(start_row + 3, 0, 'Desviación estándar DIAN:', self._get_info_format(workbook))
+        # worksheet.write_formula(start_row + 3, 1, 
+        #                        f'=STDEV(C{start_data_row}:C{end_data_row})', 
+        #                        self._get_number_format(workbook))
+        # 
+        # # Mediana
+        # worksheet.write(start_row + 4, 0, 'Mediana DIAN:', self._get_info_format(workbook))
+        # worksheet.write_formula(start_row + 4, 1, 
+        #                        f'=MEDIAN(C{start_data_row}:C{end_data_row})', 
+        #                        self._get_number_format(workbook))
 
     def _get_info_format(self, workbook):
         """Obtener formato para información"""
