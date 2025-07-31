@@ -2100,8 +2100,8 @@ class CausacionProcessor:
                     if stats:
                         self._create_simple_summary_sheet(writer, stats)
                     
-                    # Crear hoja de metadatos básica
-                    self._create_simple_metadata_sheet(writer)
+                    # Aplicar formato mejorado a las hojas
+                    self._apply_enhanced_formatting(writer, coincidencias_df, no_coincidencias_df)
                     
                     self.logger.info("Excel creado con formato básico usando openpyxl")
                     
@@ -2443,6 +2443,136 @@ class CausacionProcessor:
             
         except Exception as e:
             self.logger.error(f"Error creando metadatos simples: {e}")
+
+    def _apply_enhanced_formatting(self, writer, coincidencias_df: pd.DataFrame, no_coincidencias_df: pd.DataFrame):
+        """
+        Aplicar formato mejorado a las hojas de Excel usando openpyxl
+        
+        Args:
+            writer: ExcelWriter object con engine openpyxl
+            coincidencias_df: DataFrame de coincidencias
+            no_coincidencias_df: DataFrame de no coincidencias
+        """
+        try:
+            self.logger.info("Aplicando formato mejorado a las hojas")
+            
+            # Acceder al workbook de openpyxl
+            workbook = writer.book
+            
+            # Aplicar formato a la hoja de Coincidencias
+            if 'Coincidencias' in workbook.sheetnames and not coincidencias_df.empty:
+                self._format_sheet_as_table(workbook['Coincidencias'], coincidencias_df, 'Coincidencias')
+                
+            # Aplicar formato a la hoja de No_coincidencias  
+            if 'No_coincidencias' in workbook.sheetnames and not no_coincidencias_df.empty:
+                self._format_sheet_as_table(workbook['No_coincidencias'], no_coincidencias_df, 'No_coincidencias')
+                
+            self.logger.info("Formato mejorado aplicado exitosamente")
+            
+        except Exception as e:
+            self.logger.warning(f"Error aplicando formato mejorado: {e}, continuando con formato básico")
+
+    def _format_sheet_as_table(self, worksheet, df: pd.DataFrame, sheet_name: str):
+        """
+        Formatear una hoja como tabla con ancho de columnas optimizado
+        
+        Args:
+            worksheet: Worksheet de openpyxl
+            df: DataFrame con los datos
+            sheet_name: Nombre de la hoja
+        """
+        try:
+            from openpyxl.worksheet.table import Table, TableStyleInfo
+            from openpyxl.utils import get_column_letter
+            
+            # Ajustar ancho de columnas basado en contenido
+            for col_idx, column in enumerate(df.columns, 1):
+                col_letter = get_column_letter(col_idx)
+                
+                # Calcular ancho óptimo
+                if not df.empty:
+                    # Obtener el máximo entre el ancho del encabezado y el contenido
+                    header_width = len(str(column))
+                    content_widths = df[column].astype(str).str.len()
+                    max_content_width = content_widths.max() if not content_widths.empty else 0
+                    
+                    # Calcular ancho óptimo con límites mínimos y máximos
+                    if 'DESCRIPCI' in column.upper() or 'MOTIVO' in column.upper():
+                        # Para columnas de descripción, usar un ancho mayor
+                        optimal_width = min(max(header_width, max_content_width, 20), 60)
+                    elif 'VALOR' in column.upper() or 'DIFERENCIA' in column.upper():
+                        # Para columnas numéricas
+                        optimal_width = min(max(header_width, max_content_width, 15), 25)
+                    elif 'FECHA' in column.upper():
+                        # Para columnas de fecha
+                        optimal_width = min(max(header_width, max_content_width, 12), 20)
+                    else:
+                        # Para otras columnas
+                        optimal_width = min(max(header_width, max_content_width, 12), 35)
+                else:
+                    # Si el DataFrame está vacío, usar ancho basado en el encabezado
+                    optimal_width = len(str(column)) + 5
+                
+                # Aplicar el ancho calculado
+                worksheet.column_dimensions[col_letter].width = optimal_width
+            
+            # Crear tabla con formato
+            if not df.empty:
+                # Determinar el rango de la tabla (desde A1 hasta la última celda con datos)
+                end_col_letter = get_column_letter(len(df.columns))
+                end_row = len(df) + 1  # +1 para incluir el encabezado
+                table_range = f"A1:{end_col_letter}{end_row}"
+                
+                # Crear la tabla
+                table = Table(displayName=f"Tabla_{sheet_name}", ref=table_range)
+                
+                # Aplicar estilo de tabla
+                style = TableStyleInfo(
+                    name="TableStyleMedium9",  # Estilo azul profesional
+                    showFirstColumn=False,
+                    showLastColumn=False,
+                    showRowStripes=True,
+                    showColumnStripes=False
+                )
+                table.tableStyleInfo = style
+                
+                # Agregar la tabla a la hoja
+                worksheet.add_table(table)
+                
+                # Aplicar formato adicional a los encabezados
+                from openpyxl.styles import Font, PatternFill, Alignment
+                
+                header_font = Font(bold=True, color="FFFFFF")
+                header_fill = PatternFill(start_color="2E5984", end_color="2E5984", fill_type="solid")
+                header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                
+                # Aplicar formato a la fila de encabezados
+                for col_idx in range(1, len(df.columns) + 1):
+                    cell = worksheet.cell(row=1, column=col_idx)
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.alignment = header_alignment
+                
+                self.logger.info(f"Tabla creada para {sheet_name} con rango {table_range}")
+            
+        except Exception as e:
+            self.logger.warning(f"Error formateando {sheet_name} como tabla: {e}, aplicando formato básico")
+            # Si falla el formato de tabla, al menos ajustar el ancho de columnas
+            try:
+                from openpyxl.utils import get_column_letter
+                for col_idx, column in enumerate(df.columns, 1):
+                    col_letter = get_column_letter(col_idx)
+                    # Ancho fijo más generoso para mejorar visualización
+                    if 'DESCRIPCI' in column.upper() or 'MOTIVO' in column.upper():
+                        worksheet.column_dimensions[col_letter].width = 40
+                    elif 'VALOR' in column.upper():
+                        worksheet.column_dimensions[col_letter].width = 18
+                    elif 'FECHA' in column.upper():
+                        worksheet.column_dimensions[col_letter].width = 15
+                    else:
+                        worksheet.column_dimensions[col_letter].width = 20
+            except Exception as basic_error:
+                self.logger.warning(f"Error aplicando formato básico: {basic_error}")
 
     def _create_coincidencias_sheet(self, writer, coincidencias_df: pd.DataFrame, formats: Dict[str, Any]):
         """
