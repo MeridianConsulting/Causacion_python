@@ -2084,34 +2084,46 @@ class CausacionProcessor:
             
             self.logger.info(f"Creando archivo Excel: {output_path}")
             
-            # Crear el archivo Excel con xlsxwriter
-            with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
-                workbook = writer.book
-                
-                # Definir formatos
-                formats = self._create_excel_formats(workbook)
-                
-                # Crear hoja de coincidencias
-                if not coincidencias_df.empty:
-                    self._create_coincidencias_sheet(writer, coincidencias_df, formats)
-                
-                # Crear hoja de no coincidencias
-                if not no_coincidencias_df.empty:
-                    self._create_no_coincidencias_sheet(writer, no_coincidencias_df, formats)
-                
-                # Crear hoja de resumen
-                if stats:
-                    self._create_summary_sheet(writer, stats, formats)
-                
-                # Crear hoja de metadatos
-                self._create_metadata_sheet(writer, formats)
+            # Crear el archivo Excel con openpyxl (más estable)
+            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+                # Crear hojas básicas con openpyxl (más simple y estable)
+                try:
+                    # Crear hoja de coincidencias
+                    if not coincidencias_df.empty:
+                        coincidencias_df.to_excel(writer, sheet_name='Coincidencias', index=False)
+                    
+                    # Crear hoja de no coincidencias
+                    if not no_coincidencias_df.empty:
+                        no_coincidencias_df.to_excel(writer, sheet_name='No_coincidencias', index=False)
+                    
+                    # Crear hoja de resumen básica
+                    if stats:
+                        self._create_simple_summary_sheet(writer, stats)
+                    
+                    # Crear hoja de metadatos básica
+                    self._create_simple_metadata_sheet(writer)
+                    
+                    self.logger.info("Excel creado con formato básico usando openpyxl")
+                    
+                except Exception as e:
+                    self.logger.error(f"Error creando Excel con openpyxl: {e}")
+                    # Si falla con openpyxl, intentar con xlsxwriter básico
+                    raise e
             
             self.logger.info(f"Archivo Excel creado exitosamente: {output_path}")
             return str(output_path)
             
         except Exception as e:
             self.logger.error(f"Error al crear archivo Excel: {e}")
-            raise Exception(f"Error al crear archivo Excel: {e}")
+            # Intentar crear un archivo básico como último recurso
+            try:
+                self.logger.info("Intentando crear archivo Excel básico como fallback...")
+                self._create_basic_excel_emergency(coincidencias_df, no_coincidencias_df, output_path)
+                return str(output_path)
+            except Exception as fallback_error:
+                self.logger.error(f"Error en fallback: {fallback_error}")
+                # No hacer raise, continuar con el proceso
+                raise Exception(f"Error al crear archivo Excel: {e}")
 
     def _create_excel_formats(self, workbook) -> Dict[str, Any]:
         """
@@ -2125,114 +2137,312 @@ class CausacionProcessor:
         """
         formats = {}
         
-        # Formato de título principal
-        formats['title'] = workbook.add_format({
-            'bold': True,
-            'font_size': 16,
-            'font_color': '#1f4e79',
-            'align': 'center',
-            'valign': 'vcenter',
-            'border': 1,
-            'bg_color': '#d9e2f3'
-        })
+        try:
+            # Formato de título principal mejorado
+            formats['title'] = workbook.add_format({
+                'bold': True,
+                'font_size': 18,
+                'font_color': '#ffffff',
+                'font_name': 'Calibri',
+                'align': 'center',
+                'valign': 'vcenter',
+                'border': 2,
+                'border_color': '#1f4e79',
+                'bg_color': '#1f4e79'
+            })
         
-        # Formato de subtítulo
-        formats['subtitle'] = workbook.add_format({
-            'bold': True,
-            'font_size': 12,
-            'font_color': '#2e5984',
-            'align': 'center',
-            'valign': 'vcenter',
-            'border': 1,
-            'bg_color': '#e6f3ff'
-        })
+            # Formato de subtítulo
+            formats['subtitle'] = workbook.add_format({
+                'bold': True,
+                'font_size': 12,
+                'font_color': '#2e5984',
+                'align': 'center',
+                'valign': 'vcenter',
+                'border': 1,
+                'bg_color': '#e6f3ff'
+            })
         
-        # Formato de encabezados de tabla
-        formats['header'] = workbook.add_format({
-            'bold': True,
-            'font_size': 11,
-            'font_color': '#ffffff',
-            'align': 'center',
-            'valign': 'vcenter',
-            'border': 1,
-            'bg_color': '#4472c4',
-            'text_wrap': True
-        })
+            # Formato de encabezados de tabla mejorado
+            formats['header'] = workbook.add_format({
+                'bold': True,
+                'font_size': 11,
+                'font_color': '#ffffff',
+                'font_name': 'Calibri',
+                'align': 'center',
+                'valign': 'vcenter',
+                'border': 2,
+                'border_color': '#2e5984',
+                'bg_color': '#2e5984',
+                'text_wrap': True
+            })
         
-        # Formato de datos normales
-        formats['data'] = workbook.add_format({
-            'font_size': 10,
-            'align': 'left',
-            'valign': 'vcenter',
-            'border': 1,
-            'text_wrap': True
-        })
+            # Formato de datos normales mejorado
+            formats['data'] = workbook.add_format({
+                'font_size': 10,
+                'font_name': 'Calibri',
+                'align': 'left',
+                'valign': 'vcenter',
+                'border': 1,
+                'border_color': '#d0d0d0',
+                'text_wrap': True,
+                'shrink': True  # Ajustar texto automáticamente
+            })
         
-        # Formato de datos numéricos
-        formats['number'] = workbook.add_format({
-            'font_size': 10,
-            'align': 'right',
-            'valign': 'vcenter',
-            'border': 1,
-            'num_format': '#,##0.00'
-        })
+            # Formato de datos numéricos mejorado
+            formats['number'] = workbook.add_format({
+                'font_size': 10,
+                'font_name': 'Calibri',
+                'align': 'right',
+                'valign': 'vcenter',
+                'border': 1,
+                'border_color': '#d0d0d0',
+                'num_format': '$#,##0.00',  # Formato de moneda
+                'shrink': True
+            })
         
-        # Formato de fechas
-        formats['date'] = workbook.add_format({
-            'font_size': 10,
-            'align': 'center',
-            'valign': 'vcenter',
-            'border': 1,
-            'num_format': 'dd-mm-yyyy'
-        })
+            # Formato de fechas mejorado
+            formats['date'] = workbook.add_format({
+                'font_size': 10,
+                'font_name': 'Calibri',
+                'align': 'center',
+                'valign': 'vcenter',
+                'border': 1,
+                'border_color': '#d0d0d0',
+                'num_format': 'dd/mm/yyyy',
+                'shrink': True
+            })
         
-        # Formato de estado de validación
-        formats['status_perfecta'] = workbook.add_format({
-            'font_size': 10,
-            'align': 'center',
-            'valign': 'vcenter',
-            'border': 1,
-            'bg_color': '#c6efce',
-            'font_color': '#006100'
-        })
+            # Formato de estado de validación
+            formats['status_perfecta'] = workbook.add_format({
+                'font_size': 10,
+                'align': 'center',
+                'valign': 'vcenter',
+                'border': 1,
+                'bg_color': '#c6efce',
+                'font_color': '#006100'
+            })
         
-        formats['status_buena'] = workbook.add_format({
-            'font_size': 10,
-            'align': 'center',
-            'valign': 'vcenter',
-            'border': 1,
-            'bg_color': '#ffeb9c',
-            'font_color': '#9c6500'
-        })
+            formats['status_buena'] = workbook.add_format({
+                'font_size': 10,
+                'align': 'center',
+                'valign': 'vcenter',
+                'border': 1,
+                'bg_color': '#ffeb9c',
+                'font_color': '#9c6500'
+            })
         
-        formats['status_regular'] = workbook.add_format({
-            'font_size': 10,
-            'align': 'center',
-            'valign': 'vcenter',
-            'border': 1,
-            'bg_color': '#ffc7ce',
-            'font_color': '#9c0006'
-        })
+            formats['status_regular'] = workbook.add_format({
+                'font_size': 10,
+                'align': 'center',
+                'valign': 'vcenter',
+                'border': 1,
+                'bg_color': '#ffc7ce',
+                'font_color': '#9c0006'
+            })
         
-        formats['status_revisar'] = workbook.add_format({
-            'font_size': 10,
-            'align': 'center',
-            'valign': 'vcenter',
-            'border': 1,
-            'bg_color': '#ffeb9c',
-            'font_color': '#9c6500'
-        })
+            formats['status_revisar'] = workbook.add_format({
+                'font_size': 10,
+                'align': 'center',
+                'valign': 'vcenter',
+                'border': 1,
+                'bg_color': '#ffeb9c',
+                'font_color': '#9c6500'
+            })
         
-        # Formato de información
-        formats['info'] = workbook.add_format({
-            'font_size': 10,
-            'align': 'left',
-            'valign': 'vcenter',
-            'border': 1,
-            'bg_color': '#f2f2f2'
-        })
+            # Formato de información
+            formats['info'] = workbook.add_format({
+                'font_size': 10,
+                'align': 'left',
+                'valign': 'vcenter',
+                'border': 1,
+                'bg_color': '#f2f2f2'
+            })
+        
+        except Exception as e:
+            self.logger.warning(f"Error creando formatos avanzados: {e}. Usando formatos básicos.")
+            # Formatos básicos como fallback
+            formats = {
+                'title': workbook.add_format({'bold': True, 'font_size': 16, 'align': 'center'}),
+                'subtitle': workbook.add_format({'bold': True, 'font_size': 12, 'align': 'center'}),
+                'header': workbook.add_format({'bold': True, 'font_size': 11, 'align': 'center'}),
+                'data': workbook.add_format({'font_size': 10, 'align': 'left'}),
+                'number': workbook.add_format({'font_size': 10, 'align': 'right', 'num_format': '$#,##0.00'}),
+                'date': workbook.add_format({'font_size': 10, 'align': 'center', 'num_format': 'dd/mm/yyyy'}),
+                'status_perfecta': workbook.add_format({'align': 'center', 'bg_color': '#c6efce'}),
+                'status_buena': workbook.add_format({'align': 'center', 'bg_color': '#ffeb9c'}),
+                'status_regular': workbook.add_format({'align': 'center', 'bg_color': '#ffc7ce'}),
+                'status_revisar': workbook.add_format({'align': 'center', 'bg_color': '#ffcccc'}),
+                'info': workbook.add_format({'font_size': 10, 'align': 'left'})
+            }
         
         return formats
+
+    def _create_basic_excel_fallback(self, writer, coincidencias_df: pd.DataFrame, no_coincidencias_df: pd.DataFrame, stats: Dict[str, Any]):
+        """
+        Crear Excel básico sin formatos avanzados como fallback
+        
+        Args:
+            writer: ExcelWriter object
+            coincidencias_df: DataFrame de coincidencias
+            no_coincidencias_df: DataFrame de no coincidencias
+            stats: Estadísticas del proceso
+        """
+        try:
+            self.logger.info("Creando Excel con formato básico...")
+            
+            # Crear hojas básicas sin formatos avanzados
+            if not coincidencias_df.empty:
+                coincidencias_df.to_excel(writer, sheet_name='Coincidencias', index=False)
+                
+            if not no_coincidencias_df.empty:
+                no_coincidencias_df.to_excel(writer, sheet_name='No coincidencias', index=False)
+                
+            # Crear hoja de resumen básica
+            if stats:
+                import pandas as pd
+                summary_data = {
+                    'Metric': ['Total Coincidencias', 'Total No Coincidencias', 'Tasa de Matching'],
+                    'Value': [
+                        len(coincidencias_df),
+                        len(no_coincidencias_df),
+                        f"{(len(coincidencias_df) / (len(coincidencias_df) + len(no_coincidencias_df)) * 100):.2f}%" if (len(coincidencias_df) + len(no_coincidencias_df)) > 0 else "0%"
+                    ]
+                }
+                summary_df = pd.DataFrame(summary_data)
+                summary_df.to_excel(writer, sheet_name='Resumen', index=False)
+                
+            self.logger.info("Excel básico creado exitosamente")
+            
+        except Exception as e:
+            self.logger.error(f"Error en fallback básico: {e}")
+            raise
+
+    def _create_basic_excel_emergency(self, coincidencias_df: pd.DataFrame, no_coincidencias_df: pd.DataFrame, output_path: Path):
+        """
+        Crear Excel de emergencia muy básico
+        
+        Args:
+            coincidencias_df: DataFrame de coincidencias
+            no_coincidencias_df: DataFrame de no coincidencias
+            output_path: Ruta de salida
+        """
+        try:
+            self.logger.info("Creando Excel de emergencia...")
+            
+            # Cambiar a openpyxl que es más estable
+            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+                if not coincidencias_df.empty:
+                    coincidencias_df.to_excel(writer, sheet_name='Coincidencias', index=False)
+                    
+                if not no_coincidencias_df.empty:
+                    no_coincidencias_df.to_excel(writer, sheet_name='No_coincidencias', index=False)
+                    
+            self.logger.info("Excel de emergencia creado exitosamente")
+            
+        except Exception as e:
+            self.logger.error(f"Error en Excel de emergencia: {e}")
+            raise
+
+    def _create_simple_excel_fallback(self, writer, coincidencias_df: pd.DataFrame, no_coincidencias_df: pd.DataFrame, stats: Dict[str, Any]):
+        """
+        Crear Excel muy simple usando solo pandas como último recurso
+        
+        Args:
+            writer: ExcelWriter object
+            coincidencias_df: DataFrame de coincidencias
+            no_coincidencias_df: DataFrame de no coincidencias
+            stats: Estadísticas del proceso
+        """
+        try:
+            self.logger.info("Creando Excel simple como último recurso...")
+            
+            # Solo escribir datos sin formatos
+            if not coincidencias_df.empty:
+                coincidencias_df.to_excel(writer, sheet_name='Coincidencias', index=False, startrow=0)
+                
+            if not no_coincidencias_df.empty:
+                no_coincidencias_df.to_excel(writer, sheet_name='No_coincidencias', index=False, startrow=0)
+                
+            self.logger.info("Excel simple creado exitosamente")
+            
+        except Exception as e:
+            self.logger.error(f"Error en Excel simple: {e}")
+            # Este es el último recurso, si falla aquí no hay más opciones
+
+    def _create_simple_summary_sheet(self, writer, stats: Dict[str, Any]):
+        """
+        Crear hoja de resumen simple
+        
+        Args:
+            writer: ExcelWriter object
+            stats: Estadísticas del proceso
+        """
+        try:
+            # Crear datos de resumen básicos
+            total_coincidencias = stats.get('total_coincidencias', 0)
+            total_no_coincidencias = stats.get('total_no_coincidencias', 0)
+            total_registros = total_coincidencias + total_no_coincidencias
+            
+            tasa_matching = (total_coincidencias / total_registros * 100) if total_registros > 0 else 0
+            
+            summary_data = {
+                'Métrica': [
+                    'Total de Coincidencias',
+                    'Total de No Coincidencias',
+                    'Total de Registros',
+                    'Tasa de Matching (%)',
+                    'Fecha de Proceso'
+                ],
+                'Valor': [
+                    total_coincidencias,
+                    total_no_coincidencias,
+                    total_registros,
+                    f"{tasa_matching:.2f}%",
+                    datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+                ]
+            }
+            
+            summary_df = pd.DataFrame(summary_data)
+            summary_df.to_excel(writer, sheet_name='Resumen', index=False)
+            
+            self.logger.info("Hoja de resumen simple creada exitosamente")
+            
+        except Exception as e:
+            self.logger.error(f"Error creando resumen simple: {e}")
+
+    def _create_simple_metadata_sheet(self, writer):
+        """
+        Crear hoja de metadatos simple
+        
+        Args:
+            writer: ExcelWriter object
+        """
+        try:
+            # Crear datos de metadatos básicos
+            metadata_data = {
+                'Propiedad': [
+                    'Fecha de Generación',
+                    'Procesador',
+                    'Versión',
+                    'Motor Excel',
+                    'Sistema'
+                ],
+                'Valor': [
+                    datetime.now().strftime('%d-%m-%Y %H:%M:%S'),
+                    'CausacionProcessor',
+                    '1.0',
+                    'openpyxl',
+                    'Windows'
+                ]
+            }
+            
+            metadata_df = pd.DataFrame(metadata_data)
+            metadata_df.to_excel(writer, sheet_name='Metadatos', index=False)
+            
+            self.logger.info("Hoja de metadatos simple creada exitosamente")
+            
+        except Exception as e:
+            self.logger.error(f"Error creando metadatos simples: {e}")
 
     def _create_coincidencias_sheet(self, writer, coincidencias_df: pd.DataFrame, formats: Dict[str, Any]):
         """
@@ -2294,16 +2504,32 @@ class CausacionProcessor:
                     # Fallback sin formato si hay error
                     worksheet.write(row_idx, col_idx, value)
         
-        # Ajustar ancho de columnas
+        # Ajustar ancho de columnas de forma inteligente
         for col_idx, (col_name, _) in enumerate(columns):
-            max_width = max(
-                len(col_name),
-                coincidencias_df[col_name].astype(str).str.len().max() if not coincidencias_df.empty else 10
-            )
-            worksheet.set_column(col_idx, col_idx, min(max_width + 2, 30))
+            if not coincidencias_df.empty:
+                # Calcular ancho basado en contenido
+                content_width = coincidencias_df[col_name].astype(str).str.len().max()
+                header_width = len(col_name)
+                
+                # Ancho mínimo y máximo inteligente
+                min_width = 12
+                max_width = 50 if col_name in ['DESCRIPCIÓN DIAN', 'DESCRIPCIÓN CONTABLE'] else 25
+                
+                # Calcular ancho óptimo
+                optimal_width = max(header_width + 3, content_width + 2, min_width)
+                final_width = min(optimal_width, max_width)
+                
+                worksheet.set_column(col_idx, col_idx, final_width)
+            else:
+                # Ancho por defecto para columnas vacías
+                worksheet.set_column(col_idx, col_idx, 15)
         
         # Agregar información de resumen
         self._add_sheet_summary(worksheet, coincidencias_df, start_row + len(coincidencias_df) + 2, formats)
+        
+        # Ajustar altura de filas para mejor visualización
+        for row_idx in range(start_row, start_row + len(coincidencias_df) + 1):
+            worksheet.set_row(row_idx, 20)  # Altura óptima para lectura
         
         # Aplicar formato avanzado
         data_range = f'A{start_row}:O{start_row + len(coincidencias_df)}'
@@ -2364,16 +2590,32 @@ class CausacionProcessor:
                     # Fallback sin formato si hay error
                     worksheet.write(row_idx, col_idx, value)
         
-        # Ajustar ancho de columnas
+        # Ajustar ancho de columnas de forma inteligente
         for col_idx, (col_name, _) in enumerate(columns):
-            max_width = max(
-                len(col_name),
-                no_coincidencias_df[col_name].astype(str).str.len().max() if not no_coincidencias_df.empty else 10
-            )
-            worksheet.set_column(col_idx, col_idx, min(max_width + 2, 30))
+            if not no_coincidencias_df.empty:
+                # Calcular ancho basado en contenido
+                content_width = no_coincidencias_df[col_name].astype(str).str.len().max()
+                header_width = len(col_name)
+                
+                # Ancho mínimo y máximo inteligente
+                min_width = 12
+                max_width = 50 if col_name in ['DESCRIPCIÓN DIAN', 'DESCRIPCIÓN CONTABLE', 'MOTIVO NO COINCIDENCIA'] else 25
+                
+                # Calcular ancho óptimo
+                optimal_width = max(header_width + 3, content_width + 2, min_width)
+                final_width = min(optimal_width, max_width)
+                
+                worksheet.set_column(col_idx, col_idx, final_width)
+            else:
+                # Ancho por defecto para columnas vacías
+                worksheet.set_column(col_idx, col_idx, 15)
         
         # Agregar información de resumen
         self._add_sheet_summary(worksheet, no_coincidencias_df, start_row + len(no_coincidencias_df) + 2, formats)
+        
+        # Ajustar altura de filas para mejor visualización
+        for row_idx in range(start_row, start_row + len(no_coincidencias_df) + 1):
+            worksheet.set_row(row_idx, 20)  # Altura óptima para lectura
         
         # Aplicar formato avanzado
         data_range = f'A{start_row}:L{start_row + len(no_coincidencias_df)}'
@@ -2560,6 +2802,21 @@ class CausacionProcessor:
         try:
             self.logger.info(f"Aplicando formato condicional a hoja {sheet_type}")
             
+            # Validar que el workbook y worksheet son válidos
+            if not workbook or not worksheet:
+                self.logger.warning("Workbook o worksheet no válidos, omitiendo formato condicional")
+                return
+            
+            # Validar que el data_range es válido
+            if not data_range or ':' not in data_range:
+                self.logger.warning(f"Rango de datos inválido: {data_range}, omitiendo formato condicional")
+                return
+            
+            # Validar que el workbook tiene el método add_format (xlsxwriter)
+            if not hasattr(workbook, 'add_format'):
+                self.logger.warning("Workbook no soporta add_format, omitiendo formato condicional")
+                return
+                
             if sheet_type == 'coincidencias':
                 self._apply_coincidencias_conditional_formatting(workbook, worksheet, data_range)
             elif sheet_type == 'no_coincidencias':
@@ -2573,6 +2830,7 @@ class CausacionProcessor:
             self.logger.warning(f"Error al aplicar formato condicional: {e}")
             # Continuar sin formato condicional en lugar de fallar completamente
             self.logger.info("Continuando sin formato condicional...")
+            # No hacer raise, solo continuar sin formato condicional
 
     def _apply_coincidencias_conditional_formatting(self, workbook, worksheet, data_range: str):
         """
@@ -2582,9 +2840,143 @@ class CausacionProcessor:
             worksheet: Objeto worksheet
             data_range: Rango de datos
         """
-        # Temporalmente deshabilitamos el formato condicional para evitar errores
-        self.logger.info("Formato condicional deshabilitado temporalmente para evitar errores")
-        return
+        try:
+            # Obtener rango de filas
+            start_row = int(data_range.split(":")[0].replace("A", ""))
+            end_row = int(data_range.split(":")[1].replace("O", ""))
+            
+            # Crear formatos una sola vez para reutilizar
+            format_green = workbook.add_format({
+                'bg_color': '#c6efce',
+                'font_color': '#006100',
+                'border': 1
+            })
+            
+            format_yellow = workbook.add_format({
+                'bg_color': '#ffeb9c',
+                'font_color': '#9c6500',
+                'border': 1
+            })
+            
+            format_red = workbook.add_format({
+                'bg_color': '#ffc7ce',
+                'font_color': '#9c0006',
+                'border': 1,
+                'bold': True
+            })
+            
+            format_highlight = workbook.add_format({
+                'bg_color': '#fff2cc',
+                'font_color': '#7f6000',
+                'border': 1,
+                'bold': True
+            })
+            
+            format_confidence_high = workbook.add_format({
+                'bg_color': '#d4edda',
+                'font_color': '#155724',
+                'border': 1
+            })
+            
+            format_confidence_medium = workbook.add_format({
+                'bg_color': '#fff3cd',
+                'font_color': '#856404',
+                'border': 1
+            })
+            
+            format_confidence_low = workbook.add_format({
+                'bg_color': '#f8d7da',
+                'font_color': '#721c24',
+                'border': 1,
+                'bold': True
+            })
+            
+            # Aplicar formato condicional para diferencias de valor (columna K)
+            # Verde para diferencias menores a 1
+            worksheet.conditional_format(
+                f'K{start_row}:K{end_row}',
+                {
+                    'type': 'cell',
+                    'criteria': 'between',
+                    'minimum': -1,
+                    'maximum': 1,
+                    'format': format_green
+                }
+            )
+            
+            # Amarillo para diferencias moderadas (1-100)
+            worksheet.conditional_format(
+                f'K{start_row}:K{end_row}',
+                {
+                    'type': 'cell',
+                    'criteria': 'between',
+                    'minimum': 1.01,
+                    'maximum': 100,
+                    'format': format_yellow
+                }
+            )
+            
+            # Rojo para diferencias grandes (>100)
+            worksheet.conditional_format(
+                f'K{start_row}:K{end_row}',
+                {
+                    'type': 'cell',
+                    'criteria': '>',
+                    'value': 100,
+                    'format': format_red
+                }
+            )
+            
+            # Formato para valores altos (>1,000,000) en columnas de valor
+            worksheet.conditional_format(
+                f'C{start_row}:C{end_row}',
+                {
+                    'type': 'cell',
+                    'criteria': '>',
+                    'value': 1000000,
+                    'format': format_highlight
+                }
+            )
+            
+            # Formato para nivel de confianza (columna O)
+            # Verde para alta confianza (>=0.9)
+            worksheet.conditional_format(
+                f'O{start_row}:O{end_row}',
+                {
+                    'type': 'cell',
+                    'criteria': '>=',
+                    'value': 0.9,
+                    'format': format_confidence_high
+                }
+            )
+            
+            # Amarillo para confianza media (0.7-0.89)
+            worksheet.conditional_format(
+                f'O{start_row}:O{end_row}',
+                {
+                    'type': 'cell',
+                    'criteria': 'between',
+                    'minimum': 0.7,
+                    'maximum': 0.89,
+                    'format': format_confidence_medium
+                }
+            )
+            
+            # Rojo para baja confianza (<0.7)
+            worksheet.conditional_format(
+                f'O{start_row}:O{end_row}',
+                {
+                    'type': 'cell',
+                    'criteria': '<',
+                    'value': 0.7,
+                    'format': format_confidence_low
+                }
+            )
+            
+            self.logger.info("Formato condicional aplicado exitosamente")
+            
+        except Exception as e:
+            self.logger.warning(f"Error al aplicar formato condicional: {e}")
         
         # CÓDIGO ORIGINAL COMENTADO TEMPORALMENTE
         # try:
@@ -2613,9 +3005,83 @@ class CausacionProcessor:
             worksheet: Objeto worksheet
             data_range: Rango de datos
         """
-        # Temporalmente deshabilitamos el formato condicional para evitar errores
-        self.logger.info("Formato condicional para no coincidencias deshabilitado temporalmente")
-        return
+        try:
+            # Obtener rango de filas
+            start_row = int(data_range.split(":")[0].replace("A", ""))
+            end_row = int(data_range.split(":")[1].replace("L", ""))
+            
+            # Crear formatos una sola vez para reutilizar
+            format_dian = workbook.add_format({
+                'bg_color': '#e6f3ff',
+                'font_color': '#0c5460',
+                'border': 1
+            })
+            
+            format_contable = workbook.add_format({
+                'bg_color': '#fff2e6',
+                'font_color': '#8b4513',
+                'border': 1
+            })
+            
+            format_high_value = workbook.add_format({
+                'bg_color': '#fff2cc',
+                'font_color': '#7f6000',
+                'border': 1,
+                'bold': True
+            })
+            
+            format_blank = workbook.add_format({
+                'bg_color': '#f2f2f2',
+                'border': 1
+            })
+            
+            # Aplicar formatos condicionales usando los formatos creados
+            # Formato para registros solo DIAN (azul claro)
+            worksheet.conditional_format(
+                f'A{start_row}:A{end_row}',
+                {
+                    'type': 'text',
+                    'criteria': 'containing',
+                    'value': 'DIAN',
+                    'format': format_dian
+                }
+            )
+            
+            # Formato para registros solo CONTABLE (naranja claro)
+            worksheet.conditional_format(
+                f'A{start_row}:A{end_row}',
+                {
+                    'type': 'text',
+                    'criteria': 'containing',
+                    'value': 'CONTABLE',
+                    'format': format_contable
+                }
+            )
+            
+            # Formato para valores altos en no coincidencias
+            worksheet.conditional_format(
+                f'C{start_row}:C{end_row}',
+                {
+                    'type': 'cell',
+                    'criteria': '>',
+                    'value': 1000000,
+                    'format': format_high_value
+                }
+            )
+            
+            # Formato para celdas vacías (gris claro)
+            worksheet.conditional_format(
+                f'B{start_row}:L{end_row}',
+                {
+                    'type': 'blanks',
+                    'format': format_blank
+                }
+            )
+            
+            self.logger.info("Formato condicional para no coincidencias aplicado exitosamente")
+            
+        except Exception as e:
+            self.logger.warning(f"Error al aplicar formato condicional no coincidencias: {e}")
 
     def _apply_general_conditional_formatting(self, workbook, worksheet, data_range: str):
         """
@@ -2625,9 +3091,30 @@ class CausacionProcessor:
             worksheet: Objeto worksheet
             data_range: Rango de datos
         """
-        # Temporalmente deshabilitamos el formato condicional para evitar errores
-        self.logger.info("Formato condicional general deshabilitado temporalmente")
-        return
+        try:
+            # Obtener rango de filas para formato general
+            start_row = int(data_range.split(":")[0].replace("A", ""))
+            end_row = int(data_range.split(":")[1].split(":")[0][-1])
+            
+            # Crear formato para celdas vacías
+            format_blank = workbook.add_format({
+                'bg_color': '#f2f2f2',
+                'border': 1
+            })
+            
+            # Aplicar formato general para celdas vacías
+            worksheet.conditional_format(
+                data_range,
+                {
+                    'type': 'blanks',
+                    'format': format_blank
+                }
+            )
+            
+            self.logger.info("Formato condicional general aplicado exitosamente")
+            
+        except Exception as e:
+            self.logger.warning(f"Error al aplicar formato condicional general: {e}")
 
     def _get_conditional_format(self, workbook, format_type: str):
         """
@@ -2723,13 +3210,10 @@ class CausacionProcessor:
         try:
             self.logger.info("Agregando filtros y ordenamiento")
             
-            # Configurar filtros automáticos
-            worksheet.autofilter(f'A{header_row}:{data_range.split(":")[1]}')
-            
             # Configurar ordenamiento por defecto (por folio DIAN)
             worksheet.set_row(header_row, None, {'hidden': False})
             
-            # Agregar configuración de tabla dinámica
+            # Agregar configuración de tabla dinámica (incluye autofilter)
             self._add_pivot_table_config(workbook, worksheet, header_row, data_range)
             
             self.logger.info("Filtros y ordenamiento configurados exitosamente")
@@ -2756,28 +3240,62 @@ class CausacionProcessor:
                 'collapsed': False
             })
             
-            # Configurar rango de datos como tabla
+            # Detectar tipo de hoja para configurar tabla apropiada
+            sheet_name = worksheet.get_name().lower()
+            
+            # Configurar tabla según el tipo de hoja
+            if 'coincidencias' in sheet_name and 'no' not in sheet_name:
+                # Tabla para coincidencias - estilo azul
+                table_style = 'Table Style Medium 9'
+                table_columns = [
+                    {'header': 'FOLIO DIAN'},
+                    {'header': 'FECHA DIAN'},
+                    {'header': 'VALOR DIAN'},
+                    {'header': 'DESCRIPCIÓN DIAN'},
+                    {'header': 'TIPO DOCUMENTO DIAN'},
+                    {'header': 'NÚMERO DOCUMENTO CRUCE'},
+                    {'header': 'FECHA CONTABLE'},
+                    {'header': 'VALOR CONTABLE'},
+                    {'header': 'DESCRIPCIÓN CONTABLE'},
+                    {'header': 'CUENTA CONTABLE'},
+                    {'header': 'DIFERENCIA VALOR'},
+                    {'header': 'DIFERENCIA FECHA'},
+                    {'header': 'ESTADO VALIDACIÓN'},
+                    {'header': 'TIPO COINCIDENCIA'},
+                    {'header': 'NIVEL CONFIANZA'}
+                ]
+            elif 'no' in sheet_name and 'coincidencias' in sheet_name:
+                # Tabla para no coincidencias - estilo naranja
+                table_style = 'Table Style Medium 7'
+                table_columns = [
+                    {'header': 'FOLIO DIAN'},
+                    {'header': 'FECHA DIAN'},
+                    {'header': 'VALOR DIAN'},
+                    {'header': 'DESCRIPCIÓN DIAN'},
+                    {'header': 'TIPO DOCUMENTO DIAN'},
+                    {'header': 'NÚMERO DOCUMENTO CRUCE'},
+                    {'header': 'FECHA CONTABLE'},
+                    {'header': 'VALOR CONTABLE'},
+                    {'header': 'DESCRIPCIÓN CONTABLE'},
+                    {'header': 'CUENTA CONTABLE'},
+                    {'header': 'MOTIVO NO COINCIDENCIA'},
+                    {'header': 'ORIGEN'}
+                ]
+            else:
+                # Tabla genérica
+                table_style = 'Table Style Medium 2'
+                table_columns = [{'header': f'Columna {i+1}'} for i in range(12)]
+            
+            # Configurar tabla profesional
             worksheet.add_table(
                 f'A{header_row}:{data_range.split(":")[1]}',
                 {
-                    'style': 'Table Style Medium 2',
-                    'columns': [
-                        {'header': 'FOLIO DIAN'},
-                        {'header': 'FECHA DIAN'},
-                        {'header': 'VALOR DIAN'},
-                        {'header': 'DESCRIPCIÓN DIAN'},
-                        {'header': 'TIPO DOCUMENTO DIAN'},
-                        {'header': 'NÚMERO DOCUMENTO CRUCE'},
-                        {'header': 'FECHA CONTABLE'},
-                        {'header': 'VALOR CONTABLE'},
-                        {'header': 'DESCRIPCIÓN CONTABLE'},
-                        {'header': 'CUENTA CONTABLE'},
-                        {'header': 'DIFERENCIA VALOR'},
-                        {'header': 'DIFERENCIA FECHA'},
-                        {'header': 'ESTADO VALIDACIÓN'},
-                        {'header': 'TIPO COINCIDENCIA'},
-                        {'header': 'NIVEL CONFIANZA'}
-                    ]
+                    'style': table_style,
+                    'first_column': True,     # Resaltar primera columna
+                    'last_column': True,      # Resaltar última columna
+                    'banded_rows': True,      # Filas alternadas
+                    'banded_columns': False,  # Sin columnas alternadas
+                    'columns': table_columns
                 }
             )
             
