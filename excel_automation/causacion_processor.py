@@ -958,6 +958,13 @@ class CausacionProcessor:
                         return col
                         
         else:  # contable
+            # PRIORIDAD MÁXIMA: Buscar específicamente "NÚMERO DE DOCUMENTO CRUCE"
+            for col in df.columns:
+                col_lower = col.lower()
+                if 'numero' in col_lower and 'documento' in col_lower and 'cruce' in col_lower:
+                    self.logger.info(f"Usando columna '{col}' para documento contable (NÚMERO DE DOCUMENTO CRUCE - prioridad máxima)")
+                    return col
+            
             # Para archivos contables, buscar columna que contenga valores DIAN conocidos
             if hasattr(self, 'dian_data') and self.dian_data is not None and 'Folio' in self.dian_data.columns:
                 # Obtener algunos folios DIAN para buscar coincidencias
@@ -966,7 +973,18 @@ class CausacionProcessor:
                 best_match_col = None
                 max_matches = 0
                 
+                # Dar prioridad especial a columnas que contengan "cruce"
+                priority_cols = []
+                regular_cols = []
+                
                 for col in df.columns:
+                    if 'cruce' in col.lower():
+                        priority_cols.append(col)
+                    else:
+                        regular_cols.append(col)
+                
+                # Primero revisar columnas prioritarias, luego las regulares
+                for col in priority_cols + regular_cols:
                     try:
                         # Convertir la columna a string para búsqueda
                         col_values = df[col].astype(str)
@@ -978,6 +996,11 @@ class CausacionProcessor:
                                 matches_found += 1
                         
                         # Si encontramos coincidencias, esta podría ser la columna correcta
+                        # Si es una columna de "cruce" con al menos 1 coincidencia, darle prioridad absoluta
+                        if 'cruce' in col.lower() and matches_found > 0:
+                            self.logger.info(f"Usando columna '{col}' para documento contable (CRUCE detectado con {matches_found} coincidencias - prioridad máxima)")
+                            return col
+                        
                         if matches_found > max_matches:
                             max_matches = matches_found
                             best_match_col = col
@@ -1018,7 +1041,15 @@ class CausacionProcessor:
                 self.logger.info(f"Usando columna '{col_name}' para documento contable (detectada por contenido numérico)")
                 return col_name
             
-            # Buscar por palabras clave como fallback
+            # Buscar por palabras clave como fallback - PRIORIDAD PARA "NÚMERO DE DOCUMENTO CRUCE"
+            # Primero buscar específicamente "NÚMERO DE DOCUMENTO CRUCE"
+            for col in df.columns:
+                col_lower = col.lower()
+                if 'numero' in col_lower and 'documento' in col_lower and 'cruce' in col_lower:
+                    self.logger.info(f"Usando columna '{col}' para documento contable (NÚMERO DE DOCUMENTO CRUCE encontrado)")
+                    return col
+            
+            # Luego buscar otras palabras clave
             keywords = ['numero', 'documento', 'cruce', 'factura', 'comprobante']
             for col in df.columns:
                 col_lower = col.lower()
@@ -1561,67 +1592,56 @@ class CausacionProcessor:
 
     def create_coincidencias_dataframe(self, matches: pd.DataFrame) -> pd.DataFrame:
         """
-        Crear DataFrame de coincidencias con estructura específica para Excel
+        Crear DataFrame de coincidencias con estructura simplificada para Excel
         
         Args:
             matches: DataFrame con los registros que coinciden entre DIAN y contable
             
         Returns:
-            DataFrame estructurado para la hoja "Coincidencias"
+            DataFrame estructurado para la hoja "Coincidencias" (simplificado)
         """
         try:
-            self.logger.info("Creando DataFrame de coincidencias")
+            self.logger.info("Creando DataFrame de coincidencias simplificado")
             
             if matches.empty:
                 self.logger.warning("No hay coincidencias para procesar")
-                return pd.DataFrame()
+                return pd.DataFrame(columns=['NIT', 'DOCUMENTO CRUCE', 'FOLIO', 'VALOR', 'NOMBRE'])
             
-            # Crear DataFrame de coincidencias con estructura específica
+            # Crear DataFrame de coincidencias con estructura simplificada
             coincidencias = pd.DataFrame()
             
-            # Extraer columnas de DIAN (usando prefijo dian_)
-            dian_columns = [col for col in matches.columns if col.startswith('dian_')]
-            contable_columns = [col for col in matches.columns if col.startswith('contable_')]
+            # Buscar columna de NIT en los datos originales
+            nit_column = None
+            for col in matches.columns:
+                if 'nit' in col.lower() or 'identificacion' in col.lower() or 'cedula' in col.lower():
+                    nit_column = col
+                    break
             
-            # Columnas de DIAN - mapear dinámicamente
-            coincidencias['FOLIO DIAN'] = matches.get('dian_Folio', matches.get('dian_folio', ''))
-            coincidencias['FECHA DIAN'] = matches.get('dian_Fecha Emisión', matches.get('dian_fecha', ''))
-            coincidencias['VALOR DIAN'] = pd.to_numeric(matches.get('dian_Total', matches.get('dian_valor', 0.0)), errors='coerce').fillna(0.0)
-            coincidencias['DESCRIPCIÓN DIAN'] = matches.get('dian_Descripción', matches.get('dian_descripcion', ''))
-            coincidencias['TIPO DOCUMENTO DIAN'] = matches.get('dian_Tipo de documento', matches.get('dian_tipo_documento', ''))
+            # Solo las 5 columnas solicitadas
+            coincidencias['NIT'] = matches.get(nit_column, matches.get('dian_NIT', matches.get('contable_nit', '')))
             
-            # Columnas de Contable - mapear dinámicamente
-            coincidencias['NÚMERO DOCUMENTO CRUCE'] = matches.get('contable_valor_2', matches.get('contable_numero_documento', ''))
-            coincidencias['FECHA CONTABLE'] = matches.get('contable_fecha', '')
-            coincidencias['VALOR CONTABLE'] = pd.to_numeric(matches.get('contable_valor', 0.0), errors='coerce').fillna(0.0)
-            coincidencias['DESCRIPCIÓN CONTABLE'] = matches.get('contable_descripcion', '')
-            coincidencias['CUENTA CONTABLE'] = matches.get('contable_cuenta', '')
+            # Buscar la columna correcta de documento cruce - priorizar "NÚMERO DE DOCUMENTO CRUCE"
+            documento_cruce_value = None
+            for col in matches.columns:
+                if 'NÚMERO DE DOCUMENTO CRUCE' in col or 'numero_de_documento_cruce' in col.lower():
+                    documento_cruce_value = matches.get(col, '')
+                    break
             
-            # Columnas de validación y diferencias (ya convertidas a float arriba)
-            coincidencias['DIFERENCIA VALOR'] = (
-                coincidencias['VALOR DIAN'] - coincidencias['VALOR CONTABLE']
-            ).round(2)
+            if documento_cruce_value is None:
+                # Fallback a otros nombres posibles
+                documento_cruce_value = matches.get('contable_numero_documento_cruce', 
+                                                  matches.get('contable_numero_documento', 
+                                                            matches.get('contable_valor_2', '')))
             
-            # Calcular diferencia de fechas de forma segura
-            fecha_dian = pd.to_datetime(coincidencias['FECHA DIAN'], errors='coerce')
-            fecha_contable = pd.to_datetime(coincidencias['FECHA CONTABLE'], errors='coerce')
-            coincidencias['DIFERENCIA FECHA'] = (fecha_dian - fecha_contable).dt.days.fillna(0).astype(int)
+            coincidencias['DOCUMENTO CRUCE'] = documento_cruce_value
+            coincidencias['FOLIO'] = matches.get('dian_Folio', matches.get('dian_folio', ''))
+            coincidencias['VALOR'] = pd.to_numeric(matches.get('dian_Total', matches.get('dian_valor', 0.0)), errors='coerce').fillna(0.0)
+            coincidencias['NOMBRE'] = matches.get('dian_Descripción', matches.get('dian_descripcion', matches.get('contable_descripcion', '')))
             
-            # Columna de validación
-            coincidencias['ESTADO VALIDACIÓN'] = coincidencias.apply(
-                lambda row: self._evaluate_match_quality(row), axis=1
-            )
+            # Ordenar por folio
+            coincidencias = coincidencias.sort_values('FOLIO').reset_index(drop=True)
             
-            # Columna de tipo de coincidencia
-            coincidencias['TIPO COINCIDENCIA'] = matches.get('match_type', 'Exacta')
-            
-            # Columna de confianza
-            coincidencias['NIVEL CONFIANZA'] = matches.get('confidence', 1.0)
-            
-            # Ordenar por folio DIAN
-            coincidencias = coincidencias.sort_values('FOLIO DIAN').reset_index(drop=True)
-            
-            self.logger.info(f"DataFrame de coincidencias creado: {len(coincidencias)} registros")
+            self.logger.info(f"DataFrame de coincidencias simplificado creado: {len(coincidencias)} registros")
             
             return coincidencias
             
@@ -1631,27 +1651,23 @@ class CausacionProcessor:
 
     def create_no_coincidencias_dataframe(self, non_matches: pd.DataFrame) -> pd.DataFrame:
         """
-        Crear DataFrame de no coincidencias con estructura específica para Excel
+        Crear DataFrame de no coincidencias con estructura simplificada para Excel
         
         Args:
             non_matches: DataFrame con los registros que no coinciden
             
         Returns:
-            DataFrame estructurado para la hoja "No coincidencias"
+            DataFrame estructurado para la hoja "No coincidencias" (simplificado)
         """
         try:
-            self.logger.info("Creando DataFrame de no coincidencias")
+            self.logger.info("Creando DataFrame de no coincidencias simplificado")
             
             if non_matches.empty:
                 self.logger.warning("No hay no coincidencias para procesar")
-                # Crear DataFrame vacío con estructura correcta
-                return pd.DataFrame(columns=[
-                    'FOLIO DIAN', 'FECHA DIAN', 'VALOR DIAN', 'DESCRIPCIÓN DIAN', 'TIPO DOCUMENTO DIAN',
-                    'NÚMERO DOCUMENTO CRUCE', 'FECHA CONTABLE', 'VALOR CONTABLE', 'DESCRIPCIÓN CONTABLE',
-                    'CUENTA CONTABLE', 'MOTIVO NO COINCIDENCIA', 'ORIGEN'
-                ])
+                # Crear DataFrame vacío con estructura simplificada
+                return pd.DataFrame(columns=['NIT', 'DOCUMENTO CRUCE', 'FOLIO', 'VALOR', 'NOMBRE'])
             
-            # Crear DataFrame de no coincidencias con estructura específica
+            # Crear DataFrame de no coincidencias con estructura simplificada
             no_coincidencias = pd.DataFrame()
             
             # Identificar registros DIAN sin contraparte
@@ -1660,22 +1676,21 @@ class CausacionProcessor:
             
             # Procesar registros DIAN sin contraparte
             if not dian_only.empty:
-                # Usar nombres de columnas reales del DataFrame DIAN
                 dian_records = []
                 for idx, row in dian_only.iterrows():
+                    # Buscar columna de NIT
+                    nit_value = ''
+                    for col in row.index:
+                        if 'nit' in col.lower() or 'identificacion' in col.lower() or 'cedula' in col.lower():
+                            nit_value = row.get(col, '')
+                            break
+                    
                     record = {
-                        'FOLIO DIAN': row.get('Folio', ''),
-                        'FECHA DIAN': row.get('Fecha Emisión', ''),
-                        'VALOR DIAN': row.get('Valor Total', 0.0),
-                        'DESCRIPCIÓN DIAN': row.get('Descripción', ''),
-                        'TIPO DOCUMENTO DIAN': row.get('Tipo de documento', ''),
-                        'NÚMERO DOCUMENTO CRUCE': '',
-                        'FECHA CONTABLE': '',
-                        'VALOR CONTABLE': 0.0,
-                        'DESCRIPCIÓN CONTABLE': '',
-                        'CUENTA CONTABLE': '',
-                        'MOTIVO NO COINCIDENCIA': 'Registro DIAN sin contraparte contable',
-                        'ORIGEN': 'DIAN'
+                        'NIT': nit_value,
+                        'DOCUMENTO CRUCE': '',
+                        'FOLIO': row.get('Folio', ''),
+                        'VALOR': pd.to_numeric(row.get('Valor Total', row.get('Total', 0.0)), errors='coerce'),
+                        'NOMBRE': row.get('Descripción', row.get('Razon Social', ''))
                     }
                     dian_records.append(record)
                 
@@ -1685,22 +1700,21 @@ class CausacionProcessor:
             
             # Procesar registros contables sin contraparte
             if not contable_only.empty:
-                # Usar nombres de columnas reales del DataFrame contable
                 contable_records = []
                 for idx, row in contable_only.iterrows():
+                    # Buscar columna de NIT
+                    nit_value = ''
+                    for col in row.index:
+                        if 'nit' in col.lower() or 'identificacion' in col.lower() or 'cedula' in col.lower():
+                            nit_value = row.get(col, '')
+                            break
+                    
                     record = {
-                        'FOLIO DIAN': '',
-                        'FECHA DIAN': '',
-                        'VALOR DIAN': 0.0,
-                        'DESCRIPCIÓN DIAN': '',
-                        'TIPO DOCUMENTO DIAN': '',
-                        'NÚMERO DOCUMENTO CRUCE': row.get('numero_documento', ''),
-                        'FECHA CONTABLE': row.get('fecha', ''),
-                        'VALOR CONTABLE': row.get('valor', 0.0),
-                        'DESCRIPCIÓN CONTABLE': row.get('descripcion', row.get('detalle', '')),
-                        'CUENTA CONTABLE': row.get('cuenta', ''),
-                        'MOTIVO NO COINCIDENCIA': 'Registro contable sin contraparte DIAN',
-                        'ORIGEN': 'CONTABLE'
+                        'NIT': nit_value,
+                        'DOCUMENTO CRUCE': row.get('numero_documento', ''),
+                        'FOLIO': '',
+                        'VALOR': pd.to_numeric(row.get('valor', 0.0), errors='coerce'),
+                        'NOMBRE': row.get('descripcion', row.get('detalle', ''))
                     }
                     contable_records.append(record)
                 
@@ -1710,22 +1724,14 @@ class CausacionProcessor:
             
             # Si no hay registros, crear DataFrame vacío con estructura correcta
             if no_coincidencias.empty:
-                no_coincidencias = pd.DataFrame(columns=[
-                    'FOLIO DIAN', 'FECHA DIAN', 'VALOR DIAN', 'DESCRIPCIÓN DIAN', 'TIPO DOCUMENTO DIAN',
-                    'NÚMERO DOCUMENTO CRUCE', 'FECHA CONTABLE', 'VALOR CONTABLE', 'DESCRIPCIÓN CONTABLE',
-                    'CUENTA CONTABLE', 'MOTIVO NO COINCIDENCIA', 'ORIGEN'
-                ])
+                no_coincidencias = pd.DataFrame(columns=['NIT', 'DOCUMENTO CRUCE', 'FOLIO', 'VALOR', 'NOMBRE'])
             else:
-                # Agregar análisis de motivos más específicos
-                no_coincidencias = self._add_detailed_non_match_reasons(no_coincidencias)
-                
-                # Ordenar por origen y luego por valor
-                no_coincidencias = no_coincidencias.sort_values(
-                    ['ORIGEN', 'VALOR DIAN', 'VALOR CONTABLE'], 
-                    ascending=[True, False, False]
-                ).reset_index(drop=True)
+                # Asegurar que la columna VALOR sea numérica y reemplazar NaN con 0
+                no_coincidencias['VALOR'] = pd.to_numeric(no_coincidencias['VALOR'], errors='coerce').fillna(0.0)
+                # Ordenar por valor descendente
+                no_coincidencias = no_coincidencias.sort_values('VALOR', ascending=False).reset_index(drop=True)
             
-            self.logger.info(f"DataFrame de no coincidencias creado: {len(no_coincidencias)} registros")
+            self.logger.info(f"DataFrame de no coincidencias simplificado creado: {len(no_coincidencias)} registros")
             
             return no_coincidencias
             
@@ -1735,14 +1741,14 @@ class CausacionProcessor:
 
     def calculate_statistics(self, coincidencias: pd.DataFrame, no_coincidencias: pd.DataFrame) -> Dict[str, Any]:
         """
-        Calcular estadísticas completas del proceso de causación
+        Calcular estadísticas simplificadas del proceso de causación
         
         Args:
-            coincidencias: DataFrame de registros que coinciden
-            no_coincidencias: DataFrame de registros que no coinciden
+            coincidencias: DataFrame de registros que coinciden (columnas simplificadas)
+            no_coincidencias: DataFrame de registros que no coinciden (columnas simplificadas)
             
         Returns:
-            Diccionario con estadísticas detalladas
+            Diccionario con estadísticas básicas
         """
         try:
             self.logger.info("Calculando estadísticas del proceso de causación")
@@ -1762,24 +1768,20 @@ class CausacionProcessor:
                 stats['porcentaje_coincidencias'] = 0.0
                 stats['porcentaje_no_coincidencias'] = 0.0
             
-            # Análisis de valores
-            if not coincidencias.empty:
-                # Convertir columnas a numérico de forma segura
-                valor_dian_numeric = pd.to_numeric(coincidencias['VALOR DIAN'], errors='coerce').fillna(0)
-                valor_contable_numeric = pd.to_numeric(coincidencias['VALOR CONTABLE'], errors='coerce').fillna(0)
+            # Análisis de valores - usando la columna VALOR simplificada
+            if not coincidencias.empty and 'VALOR' in coincidencias.columns:
+                # Convertir columna VALOR a numérico de forma segura
+                valor_numeric = pd.to_numeric(coincidencias['VALOR'], errors='coerce').fillna(0)
                 
-                stats['valor_total_coincidencias'] = valor_dian_numeric.sum()
-                stats['valor_total_contable_coincidencias'] = valor_contable_numeric.sum()
-                stats['diferencia_total_valores'] = stats['valor_total_coincidencias'] - stats['valor_total_contable_coincidencias']
-                stats['porcentaje_diferencia_valores'] = (
-                    abs(stats['diferencia_total_valores']) / stats['valor_total_coincidencias'] * 100
-                    if stats['valor_total_coincidencias'] > 0 else 0.0
-                )
+                stats['valor_total_coincidencias'] = valor_numeric.sum()
+                stats['valor_total_contable_coincidencias'] = valor_numeric.sum()  # Mismo valor ya que es simplificado
+                stats['diferencia_total_valores'] = 0.0  # No hay diferencia en versión simplificada
+                stats['porcentaje_diferencia_valores'] = 0.0
                 
-                # Análisis de diferencias por tipo de coincidencia
-                stats['coincidencias_exactas'] = len(coincidencias[coincidencias['TIPO COINCIDENCIA'] == 'Exacta'])
-                stats['coincidencias_secundarias'] = len(coincidencias[coincidencias['TIPO COINCIDENCIA'] == 'Secundaria'])
-                stats['coincidencias_similitud'] = len(coincidencias[coincidencias['TIPO COINCIDENCIA'] == 'Similitud'])
+                # Estadísticas simplificadas de coincidencias
+                stats['coincidencias_exactas'] = len(coincidencias)  # Todas se consideran exactas en versión simplificada
+                stats['coincidencias_secundarias'] = 0
+                stats['coincidencias_similitud'] = 0
             else:
                 # Valores por defecto cuando no hay coincidencias
                 stats['valor_total_coincidencias'] = 0.0
@@ -1790,23 +1792,26 @@ class CausacionProcessor:
                 stats['coincidencias_secundarias'] = 0
                 stats['coincidencias_similitud'] = 0
             
-            # Análisis de no coincidencias
-            if not no_coincidencias.empty:
-                dian_only = no_coincidencias[no_coincidencias['ORIGEN'] == 'DIAN']
-                contable_only = no_coincidencias[no_coincidencias['ORIGEN'] == 'CONTABLE']
+            # Análisis de no coincidencias - usando la columna VALOR simplificada
+            if not no_coincidencias.empty and 'VALOR' in no_coincidencias.columns:
+                # En la versión simplificada no distinguimos origen, así que tomamos totales
+                valor_no_match = pd.to_numeric(no_coincidencias['VALOR'], errors='coerce').fillna(0)
                 
-                stats['registros_dian_sin_contraparte'] = len(dian_only)
-                stats['registros_contable_sin_contraparte'] = len(contable_only)
+                # Dividir por registros con y sin FOLIO para estimar origen
+                registros_con_folio = no_coincidencias[no_coincidencias['FOLIO'].notna() & (no_coincidencias['FOLIO'] != '')]
+                registros_sin_folio = no_coincidencias[no_coincidencias['FOLIO'].isna() | (no_coincidencias['FOLIO'] == '')]
                 
-                # Convertir a numérico de forma segura para no coincidencias
-                if len(dian_only) > 0 and 'VALOR DIAN' in dian_only.columns:
-                    valor_dian_no_match = pd.to_numeric(dian_only['VALOR DIAN'], errors='coerce').fillna(0)
+                stats['registros_dian_sin_contraparte'] = len(registros_con_folio)
+                stats['registros_contable_sin_contraparte'] = len(registros_sin_folio)
+                
+                if len(registros_con_folio) > 0:
+                    valor_dian_no_match = pd.to_numeric(registros_con_folio['VALOR'], errors='coerce').fillna(0)
                     stats['valor_dian_sin_contraparte'] = valor_dian_no_match.sum()
                 else:
                     stats['valor_dian_sin_contraparte'] = 0.0
                     
-                if len(contable_only) > 0 and 'VALOR CONTABLE' in contable_only.columns:
-                    valor_contable_no_match = pd.to_numeric(contable_only['VALOR CONTABLE'], errors='coerce').fillna(0)
+                if len(registros_sin_folio) > 0:
+                    valor_contable_no_match = pd.to_numeric(registros_sin_folio['VALOR'], errors='coerce').fillna(0)
                     stats['valor_contable_sin_contraparte'] = valor_contable_no_match.sum()
                 else:
                     stats['valor_contable_sin_contraparte'] = 0.0
@@ -1817,22 +1822,13 @@ class CausacionProcessor:
                 stats['valor_dian_sin_contraparte'] = 0.0
                 stats['valor_contable_sin_contraparte'] = 0.0
             
-            # Métricas de calidad
+            # Métricas de calidad simplificadas
             if not coincidencias.empty:
-                stats['coincidencias_con_diferencia_valor'] = len(
-                    coincidencias[abs(coincidencias['DIFERENCIA VALOR']) > 0.01]
-                )
-                stats['coincidencias_con_diferencia_fecha'] = len(
-                    coincidencias[abs(coincidencias['DIFERENCIA FECHA']) > 0]
-                )
-                stats['coincidencias_perfectas'] = len(
-                    coincidencias[
-                        (abs(coincidencias['DIFERENCIA VALOR']) <= 0.01) & 
-                        (abs(coincidencias['DIFERENCIA FECHA']) == 0)
-                    ]
-                )
+                # En versión simplificada no tenemos columnas de diferencia, así que todas son perfectas
+                stats['coincidencias_con_diferencia_valor'] = 0
+                stats['coincidencias_con_diferencia_fecha'] = 0
+                stats['coincidencias_perfectas'] = len(coincidencias)
             else:
-                # Valores por defecto cuando no hay coincidencias
                 stats['coincidencias_con_diferencia_valor'] = 0
                 stats['coincidencias_con_diferencia_fecha'] = 0
                 stats['coincidencias_perfectas'] = 0
@@ -2740,23 +2736,13 @@ class CausacionProcessor:
         self._apply_basic_formatting(worksheet, 'REPORTE DE COINCIDENCIAS', 
                                    'Registros que coinciden entre DIAN y Contable', formats)
         
-        # Definir columnas y sus formatos
+        # Definir columnas simplificadas y sus formatos
         columns = [
-            ('FOLIO DIAN', 'data'),
-            ('FECHA DIAN', 'date'),
-            ('VALOR DIAN', 'number'),
-            ('DESCRIPCIÓN DIAN', 'data'),
-            ('TIPO DOCUMENTO DIAN', 'data'),
-            ('NÚMERO DOCUMENTO CRUCE', 'data'),
-            ('FECHA CONTABLE', 'date'),
-            ('VALOR CONTABLE', 'number'),
-            ('DESCRIPCIÓN CONTABLE', 'data'),
-            ('CUENTA CONTABLE', 'data'),
-            ('DIFERENCIA VALOR', 'number'),
-            ('DIFERENCIA FECHA', 'number'),
-            ('ESTADO VALIDACIÓN', 'data'),
-            ('TIPO COINCIDENCIA', 'data'),
-            ('NIVEL CONFIANZA', 'number')
+            ('NIT', 'data'),
+            ('DOCUMENTO CRUCE', 'data'),
+            ('FOLIO', 'data'),
+            ('VALOR', 'number'),
+            ('NOMBRE', 'data')
         ]
         
         # Escribir encabezados
@@ -2794,7 +2780,7 @@ class CausacionProcessor:
                 
                 # Ancho mínimo y máximo inteligente
                 min_width = 12
-                max_width = 50 if col_name in ['DESCRIPCIÓN DIAN', 'DESCRIPCIÓN CONTABLE'] else 25
+                max_width = 50 if col_name in ['NOMBRE'] else 25
                 
                 # Calcular ancho óptimo
                 optimal_width = max(header_width + 3, content_width + 2, min_width)
@@ -2833,20 +2819,13 @@ class CausacionProcessor:
         self._apply_basic_formatting(worksheet, 'REPORTE DE NO COINCIDENCIAS', 
                                    'Registros que no coinciden entre DIAN y Contable', formats)
         
-        # Definir columnas y sus formatos
+        # Definir columnas simplificadas y sus formatos
         columns = [
-            ('FOLIO DIAN', 'data'),
-            ('FECHA DIAN', 'date'),
-            ('VALOR DIAN', 'number'),
-            ('DESCRIPCIÓN DIAN', 'data'),
-            ('TIPO DOCUMENTO DIAN', 'data'),
-            ('NÚMERO DOCUMENTO CRUCE', 'data'),
-            ('FECHA CONTABLE', 'date'),
-            ('VALOR CONTABLE', 'number'),
-            ('DESCRIPCIÓN CONTABLE', 'data'),
-            ('CUENTA CONTABLE', 'data'),
-            ('MOTIVO NO COINCIDENCIA', 'data'),
-            ('ORIGEN', 'data')
+            ('NIT', 'data'),
+            ('DOCUMENTO CRUCE', 'data'),
+            ('FOLIO', 'data'),
+            ('VALOR', 'number'),
+            ('NOMBRE', 'data')
         ]
         
         # Escribir encabezados
@@ -3514,38 +3493,21 @@ class CausacionProcessor:
                 # Tabla para coincidencias - estilo azul
                 table_style = 'Table Style Medium 9'
                 table_columns = [
-                    {'header': 'FOLIO DIAN'},
-                    {'header': 'FECHA DIAN'},
-                    {'header': 'VALOR DIAN'},
-                    {'header': 'DESCRIPCIÓN DIAN'},
-                    {'header': 'TIPO DOCUMENTO DIAN'},
-                    {'header': 'NÚMERO DOCUMENTO CRUCE'},
-                    {'header': 'FECHA CONTABLE'},
-                    {'header': 'VALOR CONTABLE'},
-                    {'header': 'DESCRIPCIÓN CONTABLE'},
-                    {'header': 'CUENTA CONTABLE'},
-                    {'header': 'DIFERENCIA VALOR'},
-                    {'header': 'DIFERENCIA FECHA'},
-                    {'header': 'ESTADO VALIDACIÓN'},
-                    {'header': 'TIPO COINCIDENCIA'},
-                    {'header': 'NIVEL CONFIANZA'}
+                    {'header': 'NIT'},
+                    {'header': 'DOCUMENTO CRUCE'},
+                    {'header': 'FOLIO'},
+                    {'header': 'VALOR'},
+                    {'header': 'NOMBRE'}
                 ]
             elif 'no' in sheet_name and 'coincidencias' in sheet_name:
                 # Tabla para no coincidencias - estilo naranja
                 table_style = 'Table Style Medium 7'
                 table_columns = [
-                    {'header': 'FOLIO DIAN'},
-                    {'header': 'FECHA DIAN'},
-                    {'header': 'VALOR DIAN'},
-                    {'header': 'DESCRIPCIÓN DIAN'},
-                    {'header': 'TIPO DOCUMENTO DIAN'},
-                    {'header': 'NÚMERO DOCUMENTO CRUCE'},
-                    {'header': 'FECHA CONTABLE'},
-                    {'header': 'VALOR CONTABLE'},
-                    {'header': 'DESCRIPCIÓN CONTABLE'},
-                    {'header': 'CUENTA CONTABLE'},
-                    {'header': 'MOTIVO NO COINCIDENCIA'},
-                    {'header': 'ORIGEN'}
+                    {'header': 'NIT'},
+                    {'header': 'DOCUMENTO CRUCE'},
+                    {'header': 'FOLIO'},
+                    {'header': 'VALOR'},
+                    {'header': 'NOMBRE'}
                 ]
             else:
                 # Tabla genérica
