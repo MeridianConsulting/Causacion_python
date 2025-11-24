@@ -126,8 +126,15 @@ class CausacionProcessor:
             
             self.logger.info(f"Cargando archivo contable: {file_path}")
             
-            # Leer el archivo Excel
-            df = pd.read_excel(file_path)
+            # Leer el archivo Excel saltando las primeras 4 filas de metadatos
+            # Los encabezados están en la fila 5 (índice 4)
+            try:
+                df = pd.read_excel(file_path, header=4)
+                self.logger.info("Archivo contable leído con header=4 (saltando 4 filas de metadatos)")
+            except Exception as e:
+                self.logger.warning(f"Error al leer con header=4, intentando con header=0: {e}")
+                # Fallback: leer normalmente y eliminar filas después
+                df = pd.read_excel(file_path)
             
             # Validar que el DataFrame no esté vacío
             if df.empty:
@@ -290,13 +297,17 @@ class CausacionProcessor:
             # Crear copia para no modificar el original
             clean_df = df_contable.copy()
             
-            # 1. Saltar primeras 4 filas de metadatos
-            self.logger.info("Eliminando filas de metadatos...")
-            if len(clean_df) > 4:
-                clean_df = clean_df.iloc[4:].reset_index(drop=True)
-                self.logger.info("Eliminadas 4 filas de metadatos")
+            # Nota: Si el archivo se leyó con header=4, ya no es necesario eliminar filas de metadatos
+            # Solo verificar si aún hay filas de metadatos al inicio (primera fila con valores no válidos)
+            if len(clean_df) > 0:
+                # Verificar si la primera fila parece ser metadatos (contiene texto de encabezado o está vacía)
+                first_row_values = clean_df.iloc[0].astype(str).str.lower().tolist()
+                metadata_keywords = ['meridian', 'modelo', 'importacion', 'movimiento', 'contable']
+                if any(any(kw in str(val) for kw in metadata_keywords) for val in first_row_values[:3]):
+                    self.logger.info("Eliminando primera fila de metadatos restante...")
+                    clean_df = clean_df.iloc[1:].reset_index(drop=True)
             
-            # 2. Mapear columnas 'Unnamed' a nombres descriptivos
+            # 2. Mapear columnas 'Unnamed' a nombres descriptivos (solo si es necesario)
             self.logger.info("Mapeando columnas sin nombre...")
             clean_df = self._map_unnamed_columns(clean_df)
             
@@ -1618,25 +1629,108 @@ class CausacionProcessor:
                     break
             
             # Solo las 5 columnas solicitadas
-            coincidencias['NIT'] = matches.get(nit_column, matches.get('dian_NIT', matches.get('contable_nit', '')))
+            # Buscar NIT (priorizar NIT Receptor de DIAN)
+            nit_values = []
+            for col in matches.columns:
+                col_lower = col.lower()
+                if 'nit' in col_lower and 'receptor' in col_lower:
+                    nit_values = matches[col].fillna('').astype(str)
+                    break
+            if len(nit_values) == 0:
+                for col in matches.columns:
+                    col_lower = col.lower()
+                    if 'nit' in col_lower:
+                        nit_values = matches[col].fillna('').astype(str)
+                        break
+            coincidencias['NIT'] = nit_values if len(nit_values) > 0 else ''
             
             # Buscar la columna correcta de documento cruce - priorizar "NÚMERO DE DOCUMENTO CRUCE"
-            documento_cruce_value = None
+            # Las columnas tienen prefijo contable_, así que buscar con ese prefijo
+            documento_cruce_col = None
+            
+            # Primero buscar específicamente "NÚMERO DE DOCUMENTO CRUCE" con prefijo contable_
             for col in matches.columns:
-                if 'NÚMERO DE DOCUMENTO CRUCE' in col or 'numero_de_documento_cruce' in col.lower():
-                    documento_cruce_value = matches.get(col, '')
+                col_lower = col.lower()
+                # Buscar columna que tenga "numero", "documento" y "cruce" con prefijo contable_
+                if 'contable_' in col_lower and 'numero' in col_lower and 'documento' in col_lower and 'cruce' in col_lower:
+                    documento_cruce_col = col
+                    self.logger.info(f"Columna DOCUMENTO CRUCE encontrada: {col}")
                     break
             
-            if documento_cruce_value is None:
-                # Fallback a otros nombres posibles
-                documento_cruce_value = matches.get('contable_numero_documento_cruce', 
-                                                  matches.get('contable_numero_documento', 
-                                                            matches.get('contable_valor_2', '')))
+            # Si no se encontró con prefijo contable_, buscar sin prefijo pero que contenga "cruce"
+            if documento_cruce_col is None:
+                for col in matches.columns:
+                    col_lower = col.lower()
+                    if 'numero' in col_lower and 'documento' in col_lower and 'cruce' in col_lower:
+                        documento_cruce_col = col
+                        self.logger.info(f"Columna DOCUMENTO CRUCE encontrada (sin prefijo): {col}")
+                        break
             
-            coincidencias['DOCUMENTO CRUCE'] = documento_cruce_value
-            coincidencias['FOLIO'] = matches.get('dian_Folio', matches.get('dian_folio', ''))
-            coincidencias['VALOR'] = pd.to_numeric(matches.get('dian_Total', matches.get('dian_valor', 0.0)), errors='coerce').fillna(0.0)
-            coincidencias['NOMBRE'] = matches.get('dian_Descripción', matches.get('dian_descripcion', matches.get('contable_descripcion', '')))
+            # Si aún no se encontró, buscar cualquier columna de documento contable que pueda servir
+            if documento_cruce_col is None:
+                for col in matches.columns:
+                    col_lower = col.lower()
+                    if 'contable_' in col_lower and 'numero' in col_lower and 'documento' in col_lower:
+                        documento_cruce_col = col
+                        self.logger.info(f"Columna DOCUMENTO CRUCE encontrada (fallback): {col}")
+                        break
+            
+            # Extraer valores de la columna encontrada
+            if documento_cruce_col is not None:
+                documento_cruce_values = matches[documento_cruce_col].fillna('').astype(str)
+                # Filtrar ceros y valores 'nan' como string
+                documento_cruce_values = documento_cruce_values.replace('0', '').replace('nan', '').replace('NaN', '')
+                self.logger.info(f"Valores DOCUMENTO CRUCE extraídos: {len(documento_cruce_values)} registros, {documento_cruce_values[documento_cruce_values != ''].count()} con valores")
+            else:
+                # Si no se encontró ninguna columna, crear Serie vacía del tamaño correcto
+                self.logger.warning("No se encontró columna DOCUMENTO CRUCE, usando valores vacíos")
+                documento_cruce_values = pd.Series([''] * len(matches), dtype=str)
+            
+            coincidencias['DOCUMENTO CRUCE'] = documento_cruce_values
+            
+            # Buscar Folio DIAN
+            folio_values = []
+            for col in matches.columns:
+                col_lower = col.lower()
+                if 'folio' in col_lower and 'dian' in col_lower:
+                    folio_values = matches[col].fillna('').astype(str)
+                    break
+            if len(folio_values) == 0:
+                for col in matches.columns:
+                    if 'folio' in col.lower():
+                        folio_values = matches[col].fillna('').astype(str)
+                        break
+            coincidencias['FOLIO'] = folio_values if len(folio_values) > 0 else ''
+            
+            # Buscar Valor Total DIAN
+            valor_values = []
+            for col in matches.columns:
+                col_lower = col.lower()
+                if ('total' in col_lower or 'valor' in col_lower) and 'dian' in col_lower:
+                    valor_values = pd.to_numeric(matches[col], errors='coerce').fillna(0.0)
+                    break
+            if len(valor_values) == 0:
+                for col in matches.columns:
+                    col_lower = col.lower()
+                    if 'total' in col_lower or ('valor' in col_lower and 'iva' not in col_lower):
+                        valor_values = pd.to_numeric(matches[col], errors='coerce').fillna(0.0)
+                        break
+            coincidencias['VALOR'] = valor_values if len(valor_values) > 0 else 0.0
+            
+            # Buscar Nombre/Descripción
+            nombre_values = []
+            for col in matches.columns:
+                col_lower = col.lower()
+                if ('descripcion' in col_lower or 'descripción' in col_lower) and 'dian' in col_lower:
+                    nombre_values = matches[col].fillna('').astype(str)
+                    break
+            if len(nombre_values) == 0:
+                for col in matches.columns:
+                    col_lower = col.lower()
+                    if 'descripcion' in col_lower or 'nombre' in col_lower or 'razon' in col_lower:
+                        nombre_values = matches[col].fillna('').astype(str)
+                        break
+            coincidencias['NOMBRE'] = nombre_values if len(nombre_values) > 0 else ''
             
             # Ordenar por folio
             coincidencias = coincidencias.sort_values('FOLIO').reset_index(drop=True)
@@ -1678,19 +1772,47 @@ class CausacionProcessor:
             if not dian_only.empty:
                 dian_records = []
                 for idx, row in dian_only.iterrows():
-                    # Buscar columna de NIT
+                    # Buscar columna de NIT (con prefijos posibles)
                     nit_value = ''
                     for col in row.index:
-                        if 'nit' in col.lower() or 'identificacion' in col.lower() or 'cedula' in col.lower():
+                        col_lower = col.lower()
+                        if ('nit' in col_lower or 'identificacion' in col_lower or 'cedula' in col_lower) and 'receptor' not in col_lower:
                             nit_value = row.get(col, '')
-                            break
+                            if pd.notna(nit_value) and str(nit_value).strip():
+                                break
+                    
+                    # Buscar Folio (con prefijos posibles)
+                    folio_value = ''
+                    for col in row.index:
+                        if 'folio' in col.lower():
+                            folio_value = row.get(col, '')
+                            if pd.notna(folio_value) and str(folio_value).strip():
+                                break
+                    
+                    # Buscar Valor (con prefijos posibles)
+                    valor_value = 0.0
+                    for col in row.index:
+                        col_lower = col.lower()
+                        if ('total' in col_lower or 'valor' in col_lower or 'monto' in col_lower) and 'iva' not in col_lower:
+                            valor_value = pd.to_numeric(row.get(col, 0.0), errors='coerce')
+                            if pd.notna(valor_value) and valor_value != 0:
+                                break
+                    
+                    # Buscar Nombre/Descripción (con prefijos posibles)
+                    nombre_value = ''
+                    for col in row.index:
+                        col_lower = col.lower()
+                        if ('descripcion' in col_lower or 'nombre' in col_lower or 'razon' in col_lower or 'social' in col_lower):
+                            nombre_value = row.get(col, '')
+                            if pd.notna(nombre_value) and str(nombre_value).strip():
+                                break
                     
                     record = {
-                        'NIT': nit_value,
+                        'NIT': nit_value if nit_value else '',
                         'DOCUMENTO CRUCE': '',
-                        'FOLIO': row.get('Folio', ''),
-                        'VALOR': pd.to_numeric(row.get('Valor Total', row.get('Total', 0.0)), errors='coerce'),
-                        'NOMBRE': row.get('Descripción', row.get('Razon Social', ''))
+                        'FOLIO': folio_value if folio_value else '',
+                        'VALOR': valor_value if pd.notna(valor_value) else 0.0,
+                        'NOMBRE': nombre_value if nombre_value else ''
                     }
                     dian_records.append(record)
                 
@@ -1702,19 +1824,58 @@ class CausacionProcessor:
             if not contable_only.empty:
                 contable_records = []
                 for idx, row in contable_only.iterrows():
-                    # Buscar columna de NIT
+                    # Buscar columna de NIT (con prefijos posibles)
                     nit_value = ''
                     for col in row.index:
-                        if 'nit' in col.lower() or 'identificacion' in col.lower() or 'cedula' in col.lower():
+                        col_lower = col.lower()
+                        if 'nit' in col_lower or 'identificacion' in col_lower or 'cedula' in col_lower:
                             nit_value = row.get(col, '')
-                            break
+                            if pd.notna(nit_value) and str(nit_value).strip():
+                                break
+                    
+                    # Buscar DOCUMENTO CRUCE (priorizar "NÚMERO DE DOCUMENTO CRUCE")
+                    documento_cruce_value = ''
+                    for col in row.index:
+                        col_lower = col.lower()
+                        if ('numero' in col_lower and 'documento' in col_lower and 'cruce' in col_lower) or \
+                           ('numero_de_documento_cruce' in col_lower):
+                            documento_cruce_value = row.get(col, '')
+                            if pd.notna(documento_cruce_value) and str(documento_cruce_value).strip() and str(documento_cruce_value) != '0':
+                                break
+                    
+                    # Si no se encontró, buscar otras columnas de documento
+                    if not documento_cruce_value or documento_cruce_value == '0':
+                        for col in row.index:
+                            col_lower = col.lower()
+                            if ('numero' in col_lower and 'documento' in col_lower) and 'cruce' not in col_lower:
+                                documento_cruce_value = row.get(col, '')
+                                if pd.notna(documento_cruce_value) and str(documento_cruce_value).strip():
+                                    break
+                    
+                    # Buscar Valor
+                    valor_value = 0.0
+                    for col in row.index:
+                        col_lower = col.lower()
+                        if ('valor' in col_lower or 'monto' in col_lower or 'debito' in col_lower or 'credito' in col_lower) and 'iva' not in col_lower:
+                            valor_value = pd.to_numeric(row.get(col, 0.0), errors='coerce')
+                            if pd.notna(valor_value) and valor_value != 0:
+                                break
+                    
+                    # Buscar Nombre/Descripción
+                    nombre_value = ''
+                    for col in row.index:
+                        col_lower = col.lower()
+                        if ('descripcion' in col_lower or 'nombre' in col_lower or 'detalle' in col_lower or 'concepto' in col_lower):
+                            nombre_value = row.get(col, '')
+                            if pd.notna(nombre_value) and str(nombre_value).strip():
+                                break
                     
                     record = {
-                        'NIT': nit_value,
-                        'DOCUMENTO CRUCE': row.get('numero_documento', ''),
+                        'NIT': nit_value if nit_value else '',
+                        'DOCUMENTO CRUCE': documento_cruce_value if documento_cruce_value and str(documento_cruce_value) != '0' else '',
                         'FOLIO': '',
-                        'VALOR': pd.to_numeric(row.get('valor', 0.0), errors='coerce'),
-                        'NOMBRE': row.get('descripcion', row.get('detalle', ''))
+                        'VALOR': valor_value if pd.notna(valor_value) else 0.0,
+                        'NOMBRE': nombre_value if nombre_value else ''
                     }
                     contable_records.append(record)
                 
