@@ -336,3 +336,5 @@
 2025-07-31 15:55:36,160 - excel_automation.causacion_processor - INFO - Archivo Excel creado exitosamente: C:\Users\aprendiz.it\AppData\Local\Temp\_MEI144882\data\output\Reporte_Causacion_20250731_155535.xlsx
 2025-07-31 15:55:36,160 - excel_automation.causacion_processor - INFO - Abriendo archivo Excel automáticamente: C:\Users\aprendiz.it\AppData\Local\Temp\_MEI144882\data\output\Reporte_Causacion_20250731_155535.xlsx
 2025-07-31 15:55:37,880 - excel_automation.causacion_processor - INFO - Archivo Excel abierto exitosamente
+2025-11-24 15:23:37,942 - excel_automation.causacion_processor - INFO - CausacionProcessor inicializado
+2025-11-24 15:31:39,687 - excel_automation.causacion_processor - INFO - CausacionProcessor inicializado

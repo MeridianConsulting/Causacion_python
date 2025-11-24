@@ -1416,3 +1416,7 @@
 2025-11-24 15:02:11,870 - excel_automation.causacion_processor - INFO - Archivo Excel creado exitosamente: C:\xampp\htdocs\Causacion_python\data\output\Reporte_Causacion_20251124_150211.xlsx
 2025-11-24 15:02:11,872 - excel_automation.causacion_processor - INFO - Abriendo archivo Excel automáticamente: C:\xampp\htdocs\Causacion_python\data\output\Reporte_Causacion_20251124_150211.xlsx
 2025-11-24 15:02:12,729 - excel_automation.causacion_processor - INFO - Archivo Excel abierto exitosamente
+2025-11-24 15:09:48,580 - excel_automation.causacion_processor - INFO - CausacionProcessor inicializado
+2025-11-24 15:14:00,859 - excel_automation.causacion_processor - INFO - CausacionProcessor inicializado
+2025-11-24 15:16:10,926 - excel_automation.causacion_processor - INFO - CausacionProcessor inicializado
+2025-11-24 15:16:54,899 - excel_automation.causacion_processor - INFO - CausacionProcessor inicializado

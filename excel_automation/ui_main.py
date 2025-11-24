@@ -20,6 +20,54 @@ def get_icon(standard_pixmap):
     style = QApplication.instance().style()
     return style.standardIcon(standard_pixmap)
 
+def get_app_icon():
+    """Obtener el icono de la aplicación desde archivo"""
+    # Buscar el icono en varias ubicaciones posibles
+    base_path = Path(__file__).parent.parent
+    icon_paths = [
+        base_path / "resources" / "app_icon.ico",
+        base_path / "resources" / "app_icon.png",
+        base_path / "assets" / "app_icon.ico",
+        base_path / "assets" / "app_icon.png",
+        base_path / "icon.ico",
+        base_path / "icon.png",
+        base_path / "app_icon.ico",
+        base_path / "app_icon.png",
+    ]
+    
+    # Intentar cargar el icono desde las rutas posibles
+    for icon_path in icon_paths:
+        if icon_path.exists():
+            icon_path_str = str(icon_path.resolve())
+            print(f"[DEBUG] Intentando cargar icono desde: {icon_path_str}")
+            print(f"[DEBUG] Archivo existe: {icon_path.exists()}, Tamaño: {icon_path.stat().st_size} bytes")
+            try:
+                # Usar ruta absoluta y verificar que el archivo es válido
+                icon = QIcon(icon_path_str)
+                
+                # Verificar que el icono se cargó correctamente probando diferentes tamaños
+                if not icon.isNull():
+                    # Probar si el icono tiene contenido válido
+                    test_pixmap = icon.pixmap(32, 32)
+                    if not test_pixmap.isNull():
+                        print(f"[OK] Icono cargado exitosamente desde: {icon_path_str}")
+                        print(f"[OK] Tamaño del icono: {test_pixmap.width()}x{test_pixmap.height()}")
+                        return icon
+                    else:
+                        print(f"[ERROR] El icono está vacío o no tiene contenido válido: {icon_path_str}")
+                else:
+                    print(f"[ERROR] El archivo existe pero el icono está vacío: {icon_path_str}")
+            except Exception as e:
+                print(f"[ERROR] Error al cargar icono desde {icon_path_str}: {e}")
+                import traceback
+                traceback.print_exc()
+    
+    # Si no se encuentra, mostrar mensaje de debug
+    print("[WARNING] No se encontró ningún archivo de icono válido. Usando icono por defecto.")
+    print(f"[DEBUG] Ruta base de búsqueda: {base_path.resolve()}")
+    print(f"[DEBUG] Archivos en resources/: {list((base_path / 'resources').glob('*')) if (base_path / 'resources').exists() else 'No existe'}")
+    return None
+
 class DropArea(QWidget):
     """Widget interno para el área de drag & drop"""
     
@@ -490,6 +538,18 @@ class MainWindow(QMainWindow):
         """Configurar la interfaz principal"""
         self.setWindowTitle("Sistema de Causación - DIAN & Contabilidad")
         self.setMinimumSize(800, 600)
+        
+        # Configurar icono de la ventana (también aparece en barra de tareas)
+        app_icon = get_app_icon()
+        if app_icon:
+            self.setWindowIcon(app_icon)
+            print("[OK] Icono de ventana configurado en MainWindow")
+        else:
+            # Si no hay icono personalizado, usar el de la aplicación
+            if QApplication.instance():
+                app_icon = QApplication.instance().windowIcon()
+                if not app_icon.isNull():
+                    self.setWindowIcon(app_icon)
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #ffffff;
@@ -708,6 +768,15 @@ def run_app():
     app = QApplication(sys.argv)
     app.setApplicationName("Sistema de Causación DIAN-Contable")
     app.setApplicationVersion("2.0.0")
+    
+    # Configurar icono de la aplicación (aparece en barra de tareas)
+    # IMPORTANTE: Esto debe hacerse ANTES de crear la ventana principal
+    app_icon = get_app_icon()
+    if app_icon:
+        app.setWindowIcon(app_icon)
+        print("[OK] Icono de aplicación configurado en QApplication")
+    else:
+        print("[WARNING] No se configuró icono personalizado, usando icono por defecto")
     
     # Configurar información de la aplicación
     app.setOrganizationName("Sistema de Causación")
