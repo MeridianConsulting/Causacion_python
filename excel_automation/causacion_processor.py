@@ -1644,47 +1644,84 @@ class CausacionProcessor:
                         break
             coincidencias['NIT'] = nit_values if len(nit_values) > 0 else ''
             
-            # Buscar la columna correcta de documento cruce - priorizar "NÚMERO DE DOCUMENTO CRUCE"
-            # Las columnas tienen prefijo contable_, así que buscar con ese prefijo
-            documento_cruce_col = None
+            # Buscar la columna correcta de documento cruce
+            # PRIORIDAD 1: Usar columna CX (índice 90) del DataFrame contable original si está disponible
+            documento_cruce_values = pd.Series([''] * len(matches), dtype=str)
             
-            # Primero buscar específicamente "NÚMERO DE DOCUMENTO CRUCE" con prefijo contable_
-            for col in matches.columns:
-                col_lower = col.lower()
-                # Buscar columna que tenga "numero", "documento" y "cruce" con prefijo contable_
-                if 'contable_' in col_lower and 'numero' in col_lower and 'documento' in col_lower and 'cruce' in col_lower:
-                    documento_cruce_col = col
-                    self.logger.info(f"Columna DOCUMENTO CRUCE encontrada: {col}")
-                    break
+            if self.contable_data is not None and len(self.contable_data.columns) > 90:
+                try:
+                    # Intentar usar la columna CX (índice 90) del DataFrame contable original
+                    cx_col_name = self.contable_data.columns[90]
+                    self.logger.info(f"Usando columna CX (índice 90) por defecto: '{cx_col_name}'")
+                    
+                    # Extraer valores usando los índices contables de matches
+                    if 'contable_idx' in matches.columns:
+                        for idx, row in matches.iterrows():
+                            contable_idx = row['contable_idx']
+                            if pd.notna(contable_idx) and contable_idx in self.contable_data.index:
+                                valor = self.contable_data.loc[contable_idx, cx_col_name]
+                                if pd.notna(valor):
+                                    str_valor = str(valor).strip()
+                                    if str_valor and str_valor.lower() not in ['0', 'nan', 'none', '']:
+                                        documento_cruce_values.at[idx] = str_valor
+                    
+                    self.logger.info(f"Valores DOCUMENTO CRUCE extraídos de columna CX: {documento_cruce_values[documento_cruce_values != ''].count()} con valores")
+                except Exception as e:
+                    self.logger.warning(f"Error al usar columna CX: {e}, buscando por nombre")
             
-            # Si no se encontró con prefijo contable_, buscar sin prefijo pero que contenga "cruce"
-            if documento_cruce_col is None:
+            # PRIORIDAD 2: Si no se encontraron valores en CX, buscar por nombre "NÚMERO DE DOCUMENTO CRUCE"
+            if documento_cruce_values[documento_cruce_values != ''].count() == 0:
+                documento_cruce_col = None
+                
+                # Normalizar nombres de columnas para comparación (sin tildes, espacios, mayúsculas)
+                def normalize_col_name(col_name):
+                    """Normalizar nombre de columna para comparación"""
+                    import unicodedata
+                    # Convertir a minúsculas y quitar tildes
+                    normalized = unicodedata.normalize('NFD', str(col_name).lower())
+                    normalized = ''.join(c for c in normalized if unicodedata.category(c) != 'Mn')
+                    # Reemplazar espacios y guiones bajos
+                    normalized = normalized.replace(' ', '_').replace('-', '_')
+                    return normalized
+                
+                target_normalized = normalize_col_name("NÚMERO DE DOCUMENTO CRUCE")
+                
+                # Buscar específicamente "NÚMERO DE DOCUMENTO CRUCE" con prefijo contable_
                 for col in matches.columns:
-                    col_lower = col.lower()
-                    if 'numero' in col_lower and 'documento' in col_lower and 'cruce' in col_lower:
+                    col_normalized = normalize_col_name(col)
+                    # Buscar columna que tenga "numero", "documento" y "cruce" con prefijo contable_
+                    if 'contable_' in col_normalized and target_normalized in col_normalized:
                         documento_cruce_col = col
-                        self.logger.info(f"Columna DOCUMENTO CRUCE encontrada (sin prefijo): {col}")
+                        self.logger.info(f"Columna DOCUMENTO CRUCE encontrada por nombre normalizado: {col}")
                         break
-            
-            # Si aún no se encontró, buscar cualquier columna de documento contable que pueda servir
-            if documento_cruce_col is None:
-                for col in matches.columns:
-                    col_lower = col.lower()
-                    if 'contable_' in col_lower and 'numero' in col_lower and 'documento' in col_lower:
-                        documento_cruce_col = col
-                        self.logger.info(f"Columna DOCUMENTO CRUCE encontrada (fallback): {col}")
-                        break
-            
-            # Extraer valores de la columna encontrada
-            if documento_cruce_col is not None:
-                documento_cruce_values = matches[documento_cruce_col].fillna('').astype(str)
-                # Filtrar ceros y valores 'nan' como string
-                documento_cruce_values = documento_cruce_values.replace('0', '').replace('nan', '').replace('NaN', '')
-                self.logger.info(f"Valores DOCUMENTO CRUCE extraídos: {len(documento_cruce_values)} registros, {documento_cruce_values[documento_cruce_values != ''].count()} con valores")
-            else:
-                # Si no se encontró ninguna columna, crear Serie vacía del tamaño correcto
-                self.logger.warning("No se encontró columna DOCUMENTO CRUCE, usando valores vacíos")
-                documento_cruce_values = pd.Series([''] * len(matches), dtype=str)
+                
+                # Si no se encontró con prefijo contable_, buscar sin prefijo pero que contenga "cruce"
+                if documento_cruce_col is None:
+                    for col in matches.columns:
+                        col_normalized = normalize_col_name(col)
+                        if target_normalized in col_normalized or ('numero' in col_normalized and 'documento' in col_normalized and 'cruce' in col_normalized):
+                            documento_cruce_col = col
+                            self.logger.info(f"Columna DOCUMENTO CRUCE encontrada (sin prefijo): {col}")
+                            break
+                
+                # Si aún no se encontró, buscar cualquier columna de documento contable que pueda servir
+                if documento_cruce_col is None:
+                    for col in matches.columns:
+                        col_normalized = normalize_col_name(col)
+                        if 'contable_' in col_normalized and 'numero' in col_normalized and 'documento' in col_normalized:
+                            documento_cruce_col = col
+                            self.logger.info(f"Columna DOCUMENTO CRUCE encontrada (fallback): {col}")
+                            break
+                
+                # Extraer valores de la columna encontrada
+                if documento_cruce_col is not None:
+                    documento_cruce_values = matches[documento_cruce_col].fillna('').astype(str)
+                    # Filtrar ceros y valores 'nan' como string
+                    documento_cruce_values = documento_cruce_values.replace('0', '').replace('nan', '').replace('NaN', '')
+                    self.logger.info(f"Valores DOCUMENTO CRUCE extraídos por nombre: {len(documento_cruce_values)} registros, {documento_cruce_values[documento_cruce_values != ''].count()} con valores")
+                else:
+                    # Si no se encontró ninguna columna, mantener valores vacíos
+                    self.logger.warning("No se encontró columna DOCUMENTO CRUCE, usando valores vacíos")
             
             coincidencias['DOCUMENTO CRUCE'] = documento_cruce_values
             
@@ -1822,7 +1859,34 @@ class CausacionProcessor:
             
             # Procesar registros contables sin contraparte
             if not contable_only.empty:
+                # Logging para debug: mostrar columnas disponibles
+                self.logger.info(f"Procesando {len(contable_only)} registros contables sin contraparte")
+                if len(contable_only) > 0:
+                    sample_cols = [col for col in contable_only.columns if any(kw in col.lower() for kw in ['numero', 'documento', 'cruce'])]
+                    self.logger.info(f"Columnas relacionadas con documento cruce encontradas: {sample_cols[:5]}")
+                
                 contable_records = []
+                documento_cruce_col_found = None
+                
+                # Primero, identificar la columna de documento cruce una sola vez
+                for col in contable_only.columns:
+                    col_lower = col.lower()
+                    # Buscar específicamente "NÚMERO DE DOCUMENTO CRUCE" o variaciones
+                    if ('numero' in col_lower and 'documento' in col_lower and 'cruce' in col_lower) or \
+                       ('numero_de_documento_cruce' in col_lower.replace(' ', '_')):
+                        documento_cruce_col_found = col
+                        self.logger.info(f"Columna DOCUMENTO CRUCE encontrada: '{col}'")
+                        break
+                
+                # Si no se encontró con "cruce", buscar "NÚMERO DE DOCUMENTO" como fallback
+                if documento_cruce_col_found is None:
+                    for col in contable_only.columns:
+                        col_lower = col.lower()
+                        if 'numero' in col_lower and 'documento' in col_lower and 'cruce' not in col_lower:
+                            documento_cruce_col_found = col
+                            self.logger.info(f"Columna DOCUMENTO encontrada (sin cruce): '{col}'")
+                            break
+                
                 for idx, row in contable_only.iterrows():
                     # Buscar columna de NIT (con prefijos posibles)
                     nit_value = ''
@@ -1833,24 +1897,27 @@ class CausacionProcessor:
                             if pd.notna(nit_value) and str(nit_value).strip():
                                 break
                     
-                    # Buscar DOCUMENTO CRUCE (priorizar "NÚMERO DE DOCUMENTO CRUCE")
+                    # Buscar DOCUMENTO CRUCE usando la columna identificada
                     documento_cruce_value = ''
-                    for col in row.index:
-                        col_lower = col.lower()
-                        if ('numero' in col_lower and 'documento' in col_lower and 'cruce' in col_lower) or \
-                           ('numero_de_documento_cruce' in col_lower):
-                            documento_cruce_value = row.get(col, '')
-                            if pd.notna(documento_cruce_value) and str(documento_cruce_value).strip() and str(documento_cruce_value) != '0':
-                                break
-                    
-                    # Si no se encontró, buscar otras columnas de documento
-                    if not documento_cruce_value or documento_cruce_value == '0':
+                    if documento_cruce_col_found:
+                        raw_value = row.get(documento_cruce_col_found, '')
+                        if pd.notna(raw_value):
+                            str_value = str(raw_value).strip()
+                            # Aceptar el valor si no está vacío y no es '0' o 'nan'
+                            if str_value and str_value.lower() not in ['0', 'nan', 'none', '']:
+                                documento_cruce_value = str_value
+                    else:
+                        # Fallback: buscar en cada fila si no se encontró la columna
                         for col in row.index:
                             col_lower = col.lower()
-                            if ('numero' in col_lower and 'documento' in col_lower) and 'cruce' not in col_lower:
-                                documento_cruce_value = row.get(col, '')
-                                if pd.notna(documento_cruce_value) and str(documento_cruce_value).strip():
-                                    break
+                            if ('numero' in col_lower and 'documento' in col_lower and 'cruce' in col_lower) or \
+                               ('numero_de_documento_cruce' in col_lower.replace(' ', '_')):
+                                raw_value = row.get(col, '')
+                                if pd.notna(raw_value):
+                                    str_value = str(raw_value).strip()
+                                    if str_value and str_value.lower() not in ['0', 'nan', 'none', '']:
+                                        documento_cruce_value = str_value
+                                        break
                     
                     # Buscar Valor
                     valor_value = 0.0
