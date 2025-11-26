@@ -1,0 +1,23 @@
+TAREAS REALIZADAS EN EL PROYECTO
+
+Corrección del sistema de drag and drop para permitir arrastrar archivos Excel a los campos designados
+Eliminación de todos los emojis del código fuente y de la interfaz de usuario
+Reemplazo de emojis por librería de iconos estándar de Qt usando QStyle.StandardPixmap
+Implementación de función para cargar icono personalizado de la aplicación desde recursos
+Configuración del icono de aplicación en ventana principal y barra de tareas mediante setWindowIcon
+Creación de script build_exe.bat para generar ejecutable con PyInstaller en Windows
+Creación de script build_exe.sh para generar ejecutable con PyInstaller en Linux y macOS
+Configuración de PyInstaller para incluir icono personalizado en el ejecutable generado
+Limpieza de archivos temporales y de prueba innecesarios del proyecto
+Corrección de lectura del archivo contable para usar header=4 y saltar filas de metadatos
+Análisis y diagnóstico del problema de bajo porcentaje de cruce entre archivos DIAN y contable
+Corrección de la identificación de la columna Folio en el archivo DIAN como columna C
+Mejora de la búsqueda de columna DOCUMENTO CRUCE en el DataFrame de coincidencias
+Corrección de extracción de valores de DOCUMENTO CRUCE considerando prefijos contable_
+Mejora de la búsqueda de columna DOCUMENTO CRUCE en el DataFrame de no coincidencias
+Implementación de uso de columna CX índice 90 por defecto para documento cruce en coincidencias
+Implementación de normalización de nombres de columnas para búsqueda flexible con tildes y espacios
+Mejora del logging para facilitar el debugging de problemas de extracción de columnas
+Corrección del filtrado de valores cero y nulos en la columna DOCUMENTO CRUCE
+Optimización de la búsqueda de columnas para evitar iteraciones innecesarias en el código
+

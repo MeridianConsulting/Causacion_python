@@ -454,3 +454,208 @@
 2025-11-24 16:40:22,556 - excel_automation.causacion_processor - INFO - Archivo Excel creado exitosamente: C:\xampp\htdocs\Causacion_python\data\output\Reporte_Causacion_20251124_164022.xlsx
 2025-11-24 16:40:22,558 - excel_automation.causacion_processor - INFO - Abriendo archivo Excel automáticamente: C:\xampp\htdocs\Causacion_python\data\output\Reporte_Causacion_20251124_164022.xlsx
 2025-11-24 16:40:23,433 - excel_automation.causacion_processor - INFO - Archivo Excel abierto exitosamente
+2025-11-25 08:23:24,962 - excel_automation.causacion_processor - INFO - CausacionProcessor inicializado
+2025-11-25 08:23:39,548 - excel_automation.causacion_processor - INFO - CausacionProcessor inicializado
+2025-11-25 08:23:39,549 - excel_automation.causacion_processor - INFO - Cargando archivo DIAN: C:\xampp\htdocs\Causacion_python\data\input\DIAN.xlsx
+2025-11-25 08:23:39,815 - excel_automation.causacion_processor - INFO - Iniciando limpieza de datos DIAN
+2025-11-25 08:23:39,816 - excel_automation.causacion_processor - INFO - Limpiando espacios en blanco...
+2025-11-25 08:23:39,823 - excel_automation.causacion_processor - INFO - Convirtiendo columna 'Folio' a string...
+2025-11-25 08:23:39,823 - excel_automation.causacion_processor - INFO - Procesando columna de fecha: Fecha Emisión
+2025-11-25 08:23:39,844 - excel_automation.causacion_processor - INFO - Procesando columna de fecha: Fecha Recepción
+2025-11-25 08:23:39,847 - excel_automation.causacion_processor - WARNING - Campos críticos con problemas: ["Campo 'Fecha Recepción' tiene 775 valores faltantes"]
+2025-11-25 08:23:39,849 - excel_automation.causacion_processor - INFO - Limpieza DIAN completada: 775 filas, 34 columnas
+2025-11-25 08:23:39,850 - excel_automation.causacion_processor - INFO - Iniciando validación de calidad para DIAN
+2025-11-25 08:23:39,865 - excel_automation.causacion_processor - INFO - Validación DIAN exitosa - Score: 70.0
+2025-11-25 08:23:39,865 - excel_automation.causacion_processor - INFO - Archivo DIAN cargado exitosamente: 775 filas, 34 columnas
+2025-11-25 08:23:39,866 - excel_automation.causacion_processor - INFO - Cargando archivo contable: C:\xampp\htdocs\Causacion_python\data\input\CRUCE_FINAL_OCTUBRE.xlsx
+2025-11-25 08:23:44,256 - excel_automation.causacion_processor - INFO - Archivo contable leído con header=4 (saltando 4 filas de metadatos)
+2025-11-25 08:23:44,361 - excel_automation.causacion_processor - INFO - Iniciando limpieza de datos contables
+2025-11-25 08:23:44,365 - excel_automation.causacion_processor - INFO - Mapeando columnas sin nombre...
+2025-11-25 08:23:44,527 - excel_automation.causacion_processor - INFO - Limpieza contable completada: 5377 filas, 130 columnas
+2025-11-25 08:23:44,528 - excel_automation.causacion_processor - INFO - Iniciando validación de calidad para contable
+2025-11-25 08:23:44,676 - excel_automation.causacion_processor - INFO - Validación contable exitosa - Score: 70.0
+2025-11-25 08:23:44,676 - excel_automation.causacion_processor - INFO - Archivo contable cargado exitosamente: 5377 filas, 130 columnas
+2025-11-25 08:23:44,677 - excel_automation.causacion_processor - INFO - Validación de archivos completada exitosamente
+2025-11-25 08:23:44,678 - excel_automation.causacion_processor - INFO - Iniciando cruce de datos DIAN vs Contable
+2025-11-25 08:23:44,678 - excel_automation.causacion_processor - INFO - Procesando 775 registros DIAN vs 5377 registros contables
+2025-11-25 08:23:44,679 - excel_automation.causacion_processor - INFO - Usando columna 'Folio' para documento DIAN
+2025-11-25 08:23:44,799 - excel_automation.causacion_processor - INFO - Usando columna 'NÚMERO DE DOCUMENTO CRUCE' para documento contable (CRUCE detectado con 6 coincidencias - prioridad máxima)
+2025-11-25 08:23:44,799 - excel_automation.causacion_processor - INFO - Columnas de cruce: DIAN='Folio' vs Contable='NÚMERO DE DOCUMENTO CRUCE'
+2025-11-25 08:23:44,801 - excel_automation.causacion_processor - INFO - Iniciando identificación de coincidencias
+2025-11-25 08:23:44,826 - excel_automation.causacion_processor - INFO - Realizando cruce primario por documento...
+2025-11-25 08:23:44,916 - excel_automation.causacion_processor - INFO - Encontradas 363 coincidencias exactas por documento
+2025-11-25 08:23:44,917 - excel_automation.causacion_processor - INFO - Realizando cruce secundario por valor y fecha...
+2025-11-25 08:23:44,930 - excel_automation.causacion_processor - INFO - Creando índices de valor para optimización...
+2025-11-25 08:23:45,155 - excel_automation.causacion_processor - INFO - Índices creados para 2016 valores únicos
+2025-11-25 08:23:45,258 - excel_automation.causacion_processor - INFO - Procesando DIAN: 100/590
+2025-11-25 08:23:45,333 - excel_automation.causacion_processor - INFO - Procesando DIAN: 200/590
+2025-11-25 08:23:45,375 - excel_automation.causacion_processor - INFO - Procesando DIAN: 300/590
+2025-11-25 08:23:45,388 - excel_automation.causacion_processor - INFO - Procesando DIAN: 400/590
+2025-11-25 08:23:45,439 - excel_automation.causacion_processor - INFO - Procesando DIAN: 500/590
+2025-11-25 08:23:45,496 - excel_automation.causacion_processor - INFO - Encontradas 320 coincidencias secundarias
+2025-11-25 08:23:45,502 - excel_automation.causacion_processor - INFO - Realizando cruce por similitud...
+2025-11-25 08:23:45,503 - excel_automation.causacion_processor - INFO - Encontradas 0 coincidencias por similitud
+2025-11-25 08:23:46,612 - excel_automation.causacion_processor - INFO - Identificadas 683 coincidencias y 4970 no coincidencias
+2025-11-25 08:23:46,614 - excel_automation.causacion_processor - INFO - Generando reporte de matching
+2025-11-25 08:23:46,649 - excel_automation.causacion_processor - INFO - Tasa de matching: 71.67%
+2025-11-25 08:23:46,649 - excel_automation.causacion_processor - INFO - Coincidencias de alta confianza: 363
+2025-11-25 08:23:46,650 - excel_automation.causacion_processor - INFO - Discrepancias encontradas: 0
+2025-11-25 08:23:46,650 - excel_automation.causacion_processor - INFO - Cruce completado: 683 coincidencias, 4970 no coincidencias
+2025-11-25 08:23:46,651 - excel_automation.causacion_processor - INFO - Creando DataFrame de coincidencias simplificado
+2025-11-25 08:23:46,701 - excel_automation.causacion_processor - INFO - Usando columna CX (índice 90) por defecto: 'NÚMERO DEL DOCUMENTO DEL PROVEEDOR'
+2025-11-25 08:23:46,756 - excel_automation.causacion_processor - INFO - Valores DOCUMENTO CRUCE extraídos de columna CX: 325 con valores
+2025-11-25 08:23:46,762 - excel_automation.causacion_processor - INFO - DataFrame de coincidencias simplificado creado: 683 registros
+2025-11-25 08:23:46,764 - excel_automation.causacion_processor - INFO - Creando DataFrame de no coincidencias simplificado
+2025-11-25 08:23:46,846 - excel_automation.causacion_processor - INFO - Procesando 4700 registros contables sin contraparte
+2025-11-25 08:23:46,847 - excel_automation.causacion_processor - INFO - Columnas relacionadas con documento cruce encontradas: ['Tipo de documento', 'NÚMERO DE DOCUMENTO', 'AÑO DEL DOCUMENTO', 'MES DEL DOCUMENTO', 'DÍA DEL DOCUMENTO']
+2025-11-25 08:23:48,075 - excel_automation.causacion_processor - INFO - DataFrame de no coincidencias simplificado creado: 4970 registros
+2025-11-25 08:23:48,083 - excel_automation.causacion_processor - INFO - Calculando estadísticas del proceso de causación
+2025-11-25 08:23:48,085 - excel_automation.causacion_processor - INFO - Estadísticas calculadas exitosamente
+2025-11-25 08:23:48,089 - excel_automation.causacion_processor - INFO - Creando archivo Excel: C:\xampp\htdocs\Causacion_python\data\output\Reporte_Causacion_20251125_082348.xlsx
+2025-11-25 08:23:48,145 - excel_automation.causacion_processor - INFO - Hoja de resumen simplificada creada exitosamente
+2025-11-25 08:23:48,279 - excel_automation.causacion_processor - INFO - Aplicando formato mejorado a todas las hojas
+2025-11-25 08:23:48,305 - excel_automation.causacion_processor - INFO - Formato profesional aplicado a la hoja de Resumen
+2025-11-25 08:23:48,309 - excel_automation.causacion_processor - INFO - Tabla creada para Coincidencias con rango A1:E684
+2025-11-25 08:23:48,321 - excel_automation.causacion_processor - INFO - Tabla creada para No_coincidencias con rango A1:E4971
+2025-11-25 08:23:48,321 - excel_automation.causacion_processor - INFO - Formato mejorado aplicado exitosamente a todas las hojas
+2025-11-25 08:23:48,321 - excel_automation.causacion_processor - INFO - Excel creado con formato básico usando openpyxl
+2025-11-25 08:23:48,543 - excel_automation.causacion_processor - INFO - Archivo Excel creado exitosamente: C:\xampp\htdocs\Causacion_python\data\output\Reporte_Causacion_20251125_082348.xlsx
+2025-11-25 08:23:48,585 - excel_automation.causacion_processor - INFO - Abriendo archivo Excel automáticamente: C:\xampp\htdocs\Causacion_python\data\output\Reporte_Causacion_20251125_082348.xlsx
+2025-11-25 08:23:59,902 - excel_automation.causacion_processor - INFO - Archivo Excel abierto exitosamente
+2025-11-25 08:26:56,396 - excel_automation.causacion_processor - INFO - CausacionProcessor inicializado
+2025-11-25 08:26:56,397 - excel_automation.causacion_processor - INFO - Cargando archivo DIAN: C:\xampp\htdocs\Causacion_python\data\input\DIAN.xlsx
+2025-11-25 08:26:56,583 - excel_automation.causacion_processor - INFO - Iniciando limpieza de datos DIAN
+2025-11-25 08:26:56,583 - excel_automation.causacion_processor - INFO - Limpiando espacios en blanco...
+2025-11-25 08:26:56,590 - excel_automation.causacion_processor - INFO - Convirtiendo columna 'Folio' a string...
+2025-11-25 08:26:56,591 - excel_automation.causacion_processor - INFO - Procesando columna de fecha: Fecha Emisión
+2025-11-25 08:26:56,597 - excel_automation.causacion_processor - INFO - Procesando columna de fecha: Fecha Recepción
+2025-11-25 08:26:56,599 - excel_automation.causacion_processor - WARNING - Campos críticos con problemas: ["Campo 'Fecha Recepción' tiene 775 valores faltantes"]
+2025-11-25 08:26:56,601 - excel_automation.causacion_processor - INFO - Limpieza DIAN completada: 775 filas, 34 columnas
+2025-11-25 08:26:56,602 - excel_automation.causacion_processor - INFO - Iniciando validación de calidad para DIAN
+2025-11-25 08:26:56,608 - excel_automation.causacion_processor - INFO - Validación DIAN exitosa - Score: 70.0
+2025-11-25 08:26:56,608 - excel_automation.causacion_processor - INFO - Archivo DIAN cargado exitosamente: 775 filas, 34 columnas
+2025-11-25 08:26:56,609 - excel_automation.causacion_processor - INFO - Cargando archivo contable: C:\xampp\htdocs\Causacion_python\data\input\CRUCE_FINAL_OCTUBRE.xlsx
+2025-11-25 08:27:00,997 - excel_automation.causacion_processor - INFO - Archivo contable leído con header=4 (saltando 4 filas de metadatos)
+2025-11-25 08:27:01,068 - excel_automation.causacion_processor - INFO - Iniciando limpieza de datos contables
+2025-11-25 08:27:01,070 - excel_automation.causacion_processor - INFO - Mapeando columnas sin nombre...
+2025-11-25 08:27:01,150 - excel_automation.causacion_processor - INFO - Limpieza contable completada: 5377 filas, 130 columnas
+2025-11-25 08:27:01,151 - excel_automation.causacion_processor - INFO - Iniciando validación de calidad para contable
+2025-11-25 08:27:01,197 - excel_automation.causacion_processor - INFO - Validación contable exitosa - Score: 70.0
+2025-11-25 08:27:01,197 - excel_automation.causacion_processor - INFO - Archivo contable cargado exitosamente: 5377 filas, 130 columnas
+2025-11-25 08:27:01,198 - excel_automation.causacion_processor - INFO - Validación de archivos completada exitosamente
+2025-11-25 08:27:01,198 - excel_automation.causacion_processor - INFO - Iniciando cruce de datos DIAN vs Contable
+2025-11-25 08:27:01,199 - excel_automation.causacion_processor - INFO - Procesando 775 registros DIAN vs 5377 registros contables
+2025-11-25 08:27:01,199 - excel_automation.causacion_processor - INFO - Usando columna 'Folio' para documento DIAN
+2025-11-25 08:27:01,250 - excel_automation.causacion_processor - INFO - Usando columna 'NÚMERO DE DOCUMENTO CRUCE' para documento contable (CRUCE detectado con 6 coincidencias - prioridad máxima)
+2025-11-25 08:27:01,251 - excel_automation.causacion_processor - INFO - Columnas de cruce: DIAN='Folio' vs Contable='NÚMERO DE DOCUMENTO CRUCE'
+2025-11-25 08:27:01,253 - excel_automation.causacion_processor - INFO - Iniciando identificación de coincidencias
+2025-11-25 08:27:01,256 - excel_automation.causacion_processor - INFO - Realizando cruce primario por documento...
+2025-11-25 08:27:01,318 - excel_automation.causacion_processor - INFO - Encontradas 363 coincidencias exactas por documento
+2025-11-25 08:27:01,318 - excel_automation.causacion_processor - INFO - Realizando cruce secundario por valor y fecha...
+2025-11-25 08:27:01,323 - excel_automation.causacion_processor - INFO - Creando índices de valor para optimización...
+2025-11-25 08:27:01,465 - excel_automation.causacion_processor - INFO - Índices creados para 2016 valores únicos
+2025-11-25 08:27:01,532 - excel_automation.causacion_processor - INFO - Procesando DIAN: 100/590
+2025-11-25 08:27:01,612 - excel_automation.causacion_processor - INFO - Procesando DIAN: 200/590
+2025-11-25 08:27:01,655 - excel_automation.causacion_processor - INFO - Procesando DIAN: 300/590
+2025-11-25 08:27:01,667 - excel_automation.causacion_processor - INFO - Procesando DIAN: 400/590
+2025-11-25 08:27:01,703 - excel_automation.causacion_processor - INFO - Procesando DIAN: 500/590
+2025-11-25 08:27:01,730 - excel_automation.causacion_processor - INFO - Encontradas 320 coincidencias secundarias
+2025-11-25 08:27:01,733 - excel_automation.causacion_processor - INFO - Realizando cruce por similitud...
+2025-11-25 08:27:01,733 - excel_automation.causacion_processor - INFO - Encontradas 0 coincidencias por similitud
+2025-11-25 08:27:02,587 - excel_automation.causacion_processor - INFO - Identificadas 683 coincidencias y 4970 no coincidencias
+2025-11-25 08:27:02,590 - excel_automation.causacion_processor - INFO - Generando reporte de matching
+2025-11-25 08:27:02,618 - excel_automation.causacion_processor - INFO - Tasa de matching: 71.67%
+2025-11-25 08:27:02,619 - excel_automation.causacion_processor - INFO - Coincidencias de alta confianza: 363
+2025-11-25 08:27:02,621 - excel_automation.causacion_processor - INFO - Discrepancias encontradas: 0
+2025-11-25 08:27:02,621 - excel_automation.causacion_processor - INFO - Cruce completado: 683 coincidencias, 4970 no coincidencias
+2025-11-25 08:27:02,621 - excel_automation.causacion_processor - INFO - Creando DataFrame de coincidencias simplificado
+2025-11-25 08:27:02,625 - excel_automation.causacion_processor - INFO - Usando columna CX (índice 90) por defecto: 'NÚMERO DEL DOCUMENTO DEL PROVEEDOR'
+2025-11-25 08:27:02,657 - excel_automation.causacion_processor - INFO - Valores DOCUMENTO CRUCE extraídos de columna CX: 325 con valores
+2025-11-25 08:27:02,661 - excel_automation.causacion_processor - INFO - DataFrame de coincidencias simplificado creado: 683 registros
+2025-11-25 08:27:02,662 - excel_automation.causacion_processor - INFO - Creando DataFrame de no coincidencias simplificado
+2025-11-25 08:27:02,703 - excel_automation.causacion_processor - INFO - Procesando 4700 registros contables sin contraparte
+2025-11-25 08:27:02,703 - excel_automation.causacion_processor - INFO - Columnas relacionadas con documento cruce encontradas: ['Tipo de documento', 'NÚMERO DE DOCUMENTO', 'AÑO DEL DOCUMENTO', 'MES DEL DOCUMENTO', 'DÍA DEL DOCUMENTO']
+2025-11-25 08:27:03,457 - excel_automation.causacion_processor - INFO - DataFrame de no coincidencias simplificado creado: 4970 registros
+2025-11-25 08:27:03,464 - excel_automation.causacion_processor - INFO - Calculando estadísticas del proceso de causación
+2025-11-25 08:27:03,467 - excel_automation.causacion_processor - INFO - Estadísticas calculadas exitosamente
+2025-11-25 08:27:03,468 - excel_automation.causacion_processor - INFO - Creando archivo Excel: C:\xampp\htdocs\Causacion_python\data\output\Reporte_Causacion_20251125_082703.xlsx
+2025-11-25 08:27:03,470 - excel_automation.causacion_processor - INFO - Hoja de resumen simplificada creada exitosamente
+2025-11-25 08:27:03,576 - excel_automation.causacion_processor - INFO - Aplicando formato mejorado a todas las hojas
+2025-11-25 08:27:03,577 - excel_automation.causacion_processor - INFO - Formato profesional aplicado a la hoja de Resumen
+2025-11-25 08:27:03,581 - excel_automation.causacion_processor - INFO - Tabla creada para Coincidencias con rango A1:E684
+2025-11-25 08:27:03,591 - excel_automation.causacion_processor - INFO - Tabla creada para No_coincidencias con rango A1:E4971
+2025-11-25 08:27:03,592 - excel_automation.causacion_processor - INFO - Formato mejorado aplicado exitosamente a todas las hojas
+2025-11-25 08:27:03,592 - excel_automation.causacion_processor - INFO - Excel creado con formato básico usando openpyxl
+2025-11-25 08:27:03,757 - excel_automation.causacion_processor - INFO - Archivo Excel creado exitosamente: C:\xampp\htdocs\Causacion_python\data\output\Reporte_Causacion_20251125_082703.xlsx
+2025-11-25 08:27:03,757 - excel_automation.causacion_processor - INFO - Abriendo archivo Excel automáticamente: C:\xampp\htdocs\Causacion_python\data\output\Reporte_Causacion_20251125_082703.xlsx
+2025-11-25 08:27:04,099 - excel_automation.causacion_processor - INFO - Archivo Excel abierto exitosamente
+2025-11-25 14:27:43,162 - excel_automation.causacion_processor - INFO - CausacionProcessor inicializado
+2025-11-25 14:28:26,426 - excel_automation.causacion_processor - INFO - CausacionProcessor inicializado
+2025-11-25 14:28:26,427 - excel_automation.causacion_processor - INFO - Cargando archivo DIAN: C:\xampp\htdocs\Causacion_python\data\input\DIAN.xlsx
+2025-11-25 14:28:26,844 - excel_automation.causacion_processor - INFO - Iniciando limpieza de datos DIAN
+2025-11-25 14:28:26,845 - excel_automation.causacion_processor - INFO - Limpiando espacios en blanco...
+2025-11-25 14:28:26,850 - excel_automation.causacion_processor - INFO - Convirtiendo columna 'Folio' a string...
+2025-11-25 14:28:26,851 - excel_automation.causacion_processor - INFO - Procesando columna de fecha: Fecha Emisión
+2025-11-25 14:28:26,871 - excel_automation.causacion_processor - INFO - Procesando columna de fecha: Fecha Recepción
+2025-11-25 14:28:26,877 - excel_automation.causacion_processor - WARNING - Campos críticos con problemas: ["Campo 'Fecha Recepción' tiene 775 valores faltantes"]
+2025-11-25 14:28:26,880 - excel_automation.causacion_processor - INFO - Limpieza DIAN completada: 775 filas, 34 columnas
+2025-11-25 14:28:26,887 - excel_automation.causacion_processor - INFO - Iniciando validación de calidad para DIAN
+2025-11-25 14:28:26,922 - excel_automation.causacion_processor - INFO - Validación DIAN exitosa - Score: 70.0
+2025-11-25 14:28:26,930 - excel_automation.causacion_processor - INFO - Archivo DIAN cargado exitosamente: 775 filas, 34 columnas
+2025-11-25 14:28:26,932 - excel_automation.causacion_processor - INFO - Cargando archivo contable: C:\xampp\htdocs\Causacion_python\data\input\CRUCE_FINAL_OCTUBRE.xlsx
+2025-11-25 14:28:35,816 - excel_automation.causacion_processor - INFO - Archivo contable leído con header=4 (saltando 4 filas de metadatos)
+2025-11-25 14:28:35,956 - excel_automation.causacion_processor - INFO - Iniciando limpieza de datos contables
+2025-11-25 14:28:35,963 - excel_automation.causacion_processor - INFO - Mapeando columnas sin nombre...
+2025-11-25 14:28:36,131 - excel_automation.causacion_processor - INFO - Limpieza contable completada: 5377 filas, 130 columnas
+2025-11-25 14:28:36,135 - excel_automation.causacion_processor - INFO - Iniciando validación de calidad para contable
+2025-11-25 14:28:36,229 - excel_automation.causacion_processor - INFO - Validación contable exitosa - Score: 70.0
+2025-11-25 14:28:36,229 - excel_automation.causacion_processor - INFO - Archivo contable cargado exitosamente: 5377 filas, 130 columnas
+2025-11-25 14:28:36,229 - excel_automation.causacion_processor - INFO - Validación de archivos completada exitosamente
+2025-11-25 14:28:36,230 - excel_automation.causacion_processor - INFO - Iniciando cruce de datos DIAN vs Contable
+2025-11-25 14:28:36,231 - excel_automation.causacion_processor - INFO - Procesando 775 registros DIAN vs 5377 registros contables
+2025-11-25 14:28:36,231 - excel_automation.causacion_processor - INFO - Usando columna 'Folio' para documento DIAN
+2025-11-25 14:28:36,346 - excel_automation.causacion_processor - INFO - Usando columna 'NÚMERO DE DOCUMENTO CRUCE' para documento contable (CRUCE detectado con 6 coincidencias - prioridad máxima)
+2025-11-25 14:28:36,346 - excel_automation.causacion_processor - INFO - Columnas de cruce: DIAN='Folio' vs Contable='NÚMERO DE DOCUMENTO CRUCE'
+2025-11-25 14:28:36,346 - excel_automation.causacion_processor - INFO - Iniciando identificación de coincidencias
+2025-11-25 14:28:36,384 - excel_automation.causacion_processor - INFO - Realizando cruce primario por documento...
+2025-11-25 14:28:36,504 - excel_automation.causacion_processor - INFO - Encontradas 363 coincidencias exactas por documento
+2025-11-25 14:28:36,505 - excel_automation.causacion_processor - INFO - Realizando cruce secundario por valor y fecha...
+2025-11-25 14:28:36,518 - excel_automation.causacion_processor - INFO - Creando índices de valor para optimización...
+2025-11-25 14:28:36,781 - excel_automation.causacion_processor - INFO - Índices creados para 2016 valores únicos
+2025-11-25 14:28:36,935 - excel_automation.causacion_processor - INFO - Procesando DIAN: 100/590
+2025-11-25 14:28:37,072 - excel_automation.causacion_processor - INFO - Procesando DIAN: 200/590
+2025-11-25 14:28:37,152 - excel_automation.causacion_processor - INFO - Procesando DIAN: 300/590
+2025-11-25 14:28:37,173 - excel_automation.causacion_processor - INFO - Procesando DIAN: 400/590
+2025-11-25 14:28:37,264 - excel_automation.causacion_processor - INFO - Procesando DIAN: 500/590
+2025-11-25 14:28:37,334 - excel_automation.causacion_processor - INFO - Encontradas 320 coincidencias secundarias
+2025-11-25 14:28:37,341 - excel_automation.causacion_processor - INFO - Realizando cruce por similitud...
+2025-11-25 14:28:37,353 - excel_automation.causacion_processor - INFO - Encontradas 0 coincidencias por similitud
+2025-11-25 14:28:39,044 - excel_automation.causacion_processor - INFO - Identificadas 683 coincidencias y 4970 no coincidencias
+2025-11-25 14:28:39,046 - excel_automation.causacion_processor - INFO - Generando reporte de matching
+2025-11-25 14:28:39,093 - excel_automation.causacion_processor - INFO - Tasa de matching: 71.67%
+2025-11-25 14:28:39,093 - excel_automation.causacion_processor - INFO - Coincidencias de alta confianza: 363
+2025-11-25 14:28:39,093 - excel_automation.causacion_processor - INFO - Discrepancias encontradas: 0
+2025-11-25 14:28:39,094 - excel_automation.causacion_processor - INFO - Cruce completado: 683 coincidencias, 4970 no coincidencias
+2025-11-25 14:28:39,094 - excel_automation.causacion_processor - INFO - Creando DataFrame de coincidencias simplificado
+2025-11-25 14:28:39,140 - excel_automation.causacion_processor - INFO - Usando columna CX (índice 90) por defecto: 'NÚMERO DEL DOCUMENTO DEL PROVEEDOR'
+2025-11-25 14:28:39,190 - excel_automation.causacion_processor - INFO - Valores DOCUMENTO CRUCE extraídos de columna CX: 325 con valores
+2025-11-25 14:28:39,195 - excel_automation.causacion_processor - INFO - DataFrame de coincidencias simplificado creado: 683 registros
+2025-11-25 14:28:39,197 - excel_automation.causacion_processor - INFO - Creando DataFrame de no coincidencias simplificado
+2025-11-25 14:28:39,271 - excel_automation.causacion_processor - INFO - Procesando 4700 registros contables sin contraparte
+2025-11-25 14:28:39,271 - excel_automation.causacion_processor - INFO - Columnas relacionadas con documento cruce encontradas: ['Tipo de documento', 'NÚMERO DE DOCUMENTO', 'AÑO DEL DOCUMENTO', 'MES DEL DOCUMENTO', 'DÍA DEL DOCUMENTO']
+2025-11-25 14:28:40,870 - excel_automation.causacion_processor - INFO - DataFrame de no coincidencias simplificado creado: 4970 registros
+2025-11-25 14:28:40,883 - excel_automation.causacion_processor - INFO - Calculando estadísticas del proceso de causación
+2025-11-25 14:28:40,889 - excel_automation.causacion_processor - INFO - Estadísticas calculadas exitosamente
+2025-11-25 14:28:40,898 - excel_automation.causacion_processor - INFO - Creando archivo Excel: C:\xampp\htdocs\Causacion_python\data\output\Reporte_Causacion_20251125_142840.xlsx
+2025-11-25 14:28:40,996 - excel_automation.causacion_processor - INFO - Hoja de resumen simplificada creada exitosamente
+2025-11-25 14:28:41,258 - excel_automation.causacion_processor - INFO - Aplicando formato mejorado a todas las hojas
+2025-11-25 14:28:41,296 - excel_automation.causacion_processor - INFO - Formato profesional aplicado a la hoja de Resumen
+2025-11-25 14:28:41,303 - excel_automation.causacion_processor - INFO - Tabla creada para Coincidencias con rango A1:E684
+2025-11-25 14:28:41,324 - excel_automation.causacion_processor - INFO - Tabla creada para No_coincidencias con rango A1:E4971
+2025-11-25 14:28:41,325 - excel_automation.causacion_processor - INFO - Formato mejorado aplicado exitosamente a todas las hojas
+2025-11-25 14:28:41,325 - excel_automation.causacion_processor - INFO - Excel creado con formato básico usando openpyxl
+2025-11-25 14:28:41,718 - excel_automation.causacion_processor - INFO - Archivo Excel creado exitosamente: C:\xampp\htdocs\Causacion_python\data\output\Reporte_Causacion_20251125_142840.xlsx
+2025-11-25 14:28:41,813 - excel_automation.causacion_processor - INFO - Abriendo archivo Excel automáticamente: C:\xampp\htdocs\Causacion_python\data\output\Reporte_Causacion_20251125_142840.xlsx
+2025-11-25 14:28:43,567 - excel_automation.causacion_processor - INFO - Archivo Excel abierto exitosamente
+2025-11-26 08:05:48,628 - excel_automation.causacion_processor - INFO - CausacionProcessor inicializado
+2025-11-26 08:08:05,639 - excel_automation.causacion_processor - INFO - CausacionProcessor inicializado
