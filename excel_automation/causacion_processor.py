@@ -241,6 +241,125 @@ class CausacionProcessor:
             for col in clean_df.select_dtypes(include=['object']).columns:
                 clean_df[col] = clean_df[col].astype(str).str.strip()
             
+            # 1.5. Filtrar registros no deseados según criterios específicos
+            filas_antes_filtro = len(clean_df)
+            
+            # Filtrar por columna A (Tipo de documento) - excluir "application response" y nómina
+            if len(clean_df.columns) > 0:
+                columna_a = clean_df.columns[0]  # Primera columna (columna A)
+                # Convertir a string y mayúsculas para comparación
+                clean_df[columna_a] = clean_df[columna_a].astype(str).str.strip().str.upper()
+                
+                # Filtrar registros que contengan "application response" o referencias a nómina
+                mask_tipo_doc = (
+                    ~clean_df[columna_a].str.contains('APPLICATION RESPONSE', case=False, na=False) &
+                    ~clean_df[columna_a].str.contains('NOMINA', case=False, na=False) &
+                    ~clean_df[columna_a].str.contains('NÓMINA', case=False, na=False) &
+                    ~clean_df[columna_a].str.contains('NOMINA', case=False, na=False)
+                )
+                clean_df = clean_df[mask_tipo_doc].copy()
+                
+                filas_despues_tipo = len(clean_df)
+                filtrados_tipo = filas_antes_filtro - filas_despues_tipo
+                if filtrados_tipo > 0:
+                    self.logger.info(f"Filtrados {filtrados_tipo} registros por tipo de documento (application response/nómina)")
+            
+            # Filtrar por columna K (Nombre Emisor) - excluir "MERIDIAN CONSULTING LTDA" 
+            # SOLO si también es "Application response" o "Nómina" (no excluir facturas válidas)
+            if len(clean_df.columns) > 10:
+                columna_k = clean_df.columns[10]  # Columna K (índice 10)
+                columna_a = clean_df.columns[0] if len(clean_df.columns) > 0 else None
+                # Convertir a string y mayúsculas para comparación
+                clean_df[columna_k] = clean_df[columna_k].astype(str).str.strip().str.upper()
+                
+                # Filtrar registros donde el nombre emisor sea "MERIDIAN CONSULTING LTDA" 
+                # Y además sea "Application response" o "Nómina"
+                filas_antes_emisor = len(clean_df)
+                
+                # Identificar registros MERIDIAN
+                es_meridian = clean_df[columna_k].str.contains('MERIDIAN CONSULTING LTDA', case=False, na=False)
+                
+                # De los registros MERIDIAN, solo excluir los que también sean Application response o Nómina
+                if columna_a:
+                    es_application_o_nomina = (
+                        clean_df[columna_a].str.contains('APPLICATION RESPONSE', case=False, na=False) |
+                        clean_df[columna_a].str.contains('NOMINA', case=False, na=False) |
+                        clean_df[columna_a].str.contains('NÓMINA', case=False, na=False)
+                    )
+                    # Excluir solo MERIDIAN que también sea Application/Nómina
+                    mask_nombre_emisor = ~(es_meridian & es_application_o_nomina)
+                else:
+                    # Si no hay columna A, mantener el filtro original (excluir todos los MERIDIAN)
+                    mask_nombre_emisor = ~es_meridian
+                
+                clean_df = clean_df[mask_nombre_emisor].copy()
+                
+                filas_despues_emisor = len(clean_df)
+                filtrados_emisor = filas_antes_emisor - filas_despues_emisor
+                if filtrados_emisor > 0:
+                    self.logger.info(f"Filtrados {filtrados_emisor} registros MERIDIAN CONSULTING que también son Application response/Nómina")
+                    # Contar cuántos MERIDIAN válidos se mantienen
+                    meridian_validos = (clean_df[columna_k].str.contains('MERIDIAN CONSULTING LTDA', case=False, na=False).sum() 
+                                      if columna_k in clean_df.columns else 0)
+                    if meridian_validos > 0:
+                        self.logger.info(f"Mantenidos {meridian_validos} registros MERIDIAN CONSULTING válidos (facturas electrónicas, etc.)")
+            
+            # También buscar por nombre de columna si existe (más robusto)
+            # Buscar columna "Tipo de documento" o similar
+            tipo_doc_cols = [col for col in clean_df.columns 
+                           if any(keyword in col.lower() for keyword in ['tipo', 'documento', 'type', 'doc'])]
+            if tipo_doc_cols:
+                for col in tipo_doc_cols:
+                    if col in clean_df.columns:
+                        clean_df[col] = clean_df[col].astype(str).str.strip().str.upper()
+                        mask = (
+                            ~clean_df[col].str.contains('APPLICATION RESPONSE', case=False, na=False) &
+                            ~clean_df[col].str.contains('NOMINA', case=False, na=False) &
+                            ~clean_df[col].str.contains('NÓMINA', case=False, na=False)
+                        )
+                        filas_antes = len(clean_df)
+                        clean_df = clean_df[mask].copy()
+                        filtrados = filas_antes - len(clean_df)
+                        if filtrados > 0:
+                            self.logger.info(f"Filtrados {filtrados} registros adicionales por columna '{col}'")
+            
+            # Buscar columna "Nombre Emisor" o similar
+            nombre_emisor_cols = [col for col in clean_df.columns 
+                                if any(keyword in col.lower() for keyword in ['nombre', 'emisor', 'name', 'issuer', 'remitente'])]
+            if nombre_emisor_cols:
+                for col in nombre_emisor_cols:
+                    if col in clean_df.columns:
+                        clean_df[col] = clean_df[col].astype(str).str.strip().str.upper()
+                        # Aplicar misma lógica: solo excluir MERIDIAN que también sea Application/Nómina
+                        es_meridian = clean_df[col].str.contains('MERIDIAN CONSULTING LTDA', case=False, na=False)
+                        # Buscar columna de tipo de documento si existe
+                        tipo_doc_col = None
+                        for tipo_col in tipo_doc_cols:
+                            if tipo_col in clean_df.columns:
+                                tipo_doc_col = tipo_col
+                                break
+                        
+                        if tipo_doc_col:
+                            es_application_o_nomina = (
+                                clean_df[tipo_doc_col].str.contains('APPLICATION RESPONSE', case=False, na=False) |
+                                clean_df[tipo_doc_col].str.contains('NOMINA', case=False, na=False) |
+                                clean_df[tipo_doc_col].str.contains('NÓMINA', case=False, na=False)
+                            )
+                            mask = ~(es_meridian & es_application_o_nomina)
+                        else:
+                            mask = ~es_meridian
+                        
+                        filas_antes = len(clean_df)
+                        clean_df = clean_df[mask].copy()
+                        filtrados = filas_antes - len(clean_df)
+                        if filtrados > 0:
+                            self.logger.info(f"Filtrados {filtrados} registros adicionales por columna '{col}' (Nombre Emisor - MERIDIAN con Application/Nómina)")
+            
+            filas_despues_filtro = len(clean_df)
+            total_filtrados = filas_antes_filtro - filas_despues_filtro
+            if total_filtrados > 0:
+                self.logger.info(f"Total de registros filtrados: {total_filtrados}, registros restantes: {filas_despues_filtro}")
+            
             # 2. Convertir 'Folio' a string (asumiendo que existe la columna)
             folio_columns = [col for col in clean_df.columns if 'folio' in col.lower()]
             for col in folio_columns:
@@ -330,6 +449,24 @@ class CausacionProcessor:
                 except Exception as e:
                     self.logger.warning(f"No se pudo limpiar la columna '{col}': {e}")
                     continue
+            
+            # 5.5. Filtrar solo registros con tipo de comprobante "P" en la columna A
+            if len(clean_df.columns) > 0:
+                primera_columna = clean_df.columns[0]
+                filas_antes = len(clean_df)
+                
+                # Convertir la primera columna a string y filtrar solo los que sean "P"
+                clean_df[primera_columna] = clean_df[primera_columna].astype(str).str.strip().str.upper()
+                clean_df = clean_df[clean_df[primera_columna] == 'P'].copy()
+                
+                filas_despues = len(clean_df)
+                filas_filtradas = filas_antes - filas_despues
+                
+                if filas_filtradas > 0:
+                    self.logger.info(f"Filtrados {filas_filtradas} registros que no tienen tipo de comprobante 'P' en columna A")
+                    self.logger.info(f"Registros restantes con tipo 'P': {filas_despues}")
+                else:
+                    self.logger.info(f"Todos los registros tienen tipo de comprobante 'P' en columna A")
             
             # 6. Eliminar filas completamente vacías
             initial_rows = len(clean_df)
