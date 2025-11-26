@@ -20,4 +20,11 @@ Implementación de normalización de nombres de columnas para búsqueda flexible
 Mejora del logging para facilitar el debugging de problemas de extracción de columnas
 Corrección del filtrado de valores cero y nulos en la columna DOCUMENTO CRUCE
 Optimización de la búsqueda de columnas para evitar iteraciones innecesarias en el código
+Implementación de centrado de ventana principal al iniciar la aplicación en el centro de la pantalla
+Agregado filtro para procesar solo registros con tipo de comprobante P en columna A del archivo contable
+Implementación de filtros de limpieza en archivo DIAN para excluir application response y nómina
+Agregado filtro condicional para excluir registros MERIDIAN CONSULTING solo si también son application response o nómina
+Ajuste de filtros para mantener facturas electrónicas válidas de MERIDIAN y mejorar tasa de cruce
+Análisis detallado de archivos DIAN y contable para diagnosticar problema de baja tasa de cruce del 2%
+Optimización de filtros para recuperar registros válidos y aumentar tasa de cruce esperada al 29-35%
 
