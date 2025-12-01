@@ -2125,13 +2125,39 @@ class CausacionProcessor:
             stats['total_no_coincidencias'] = len(no_coincidencias)
             stats['total_registros'] = stats['total_coincidencias'] + stats['total_no_coincidencias']
             
-            # Porcentajes de matching
-            if stats['total_registros'] > 0:
-                stats['porcentaje_coincidencias'] = (stats['total_coincidencias'] / stats['total_registros']) * 100
-                stats['porcentaje_no_coincidencias'] = (stats['total_no_coincidencias'] / stats['total_registros']) * 100
+            # Filtrar registros válidos de no coincidencias
+            # Un registro es válido si tiene FOLIO (DIAN) o DOCUMENTO CRUCE (contable) no vacío
+            no_coincidencias_validas = pd.DataFrame()
+            if not no_coincidencias.empty:
+                # Convertir a string y limpiar para comparación
+                folio_valid = no_coincidencias['FOLIO'].astype(str).str.strip()
+                doc_cruce_valid = no_coincidencias['DOCUMENTO CRUCE'].astype(str).str.strip()
+                
+                # Un registro es válido si tiene FOLIO no vacío O DOCUMENTO CRUCE no vacío
+                # (excluyendo valores como 'nan', 'None', '', '0')
+                valores_invalidos = ['nan', 'none', '', '0', 'nan', 'none']
+                tiene_folio_valido = (folio_valid.notna()) & (~folio_valid.isin(valores_invalidos))
+                tiene_doc_cruce_valido = (doc_cruce_valid.notna()) & (~doc_cruce_valid.isin(valores_invalidos))
+                
+                # Filtrar registros válidos
+                no_coincidencias_validas = no_coincidencias[tiene_folio_valido | tiene_doc_cruce_valido].copy()
+            
+            stats['total_no_coincidencias_validas'] = len(no_coincidencias_validas)
+            stats['total_registros_validos'] = stats['total_coincidencias'] + stats['total_no_coincidencias_validas']
+            stats['total_registros_invalidos'] = stats['total_no_coincidencias'] - stats['total_no_coincidencias_validas']
+            
+            # Porcentajes de matching - usando solo registros válidos como base
+            if stats['total_registros_validos'] > 0:
+                stats['porcentaje_coincidencias'] = (stats['total_coincidencias'] / stats['total_registros_validos']) * 100
+                stats['porcentaje_no_coincidencias'] = (stats['total_no_coincidencias_validas'] / stats['total_registros_validos']) * 100
             else:
                 stats['porcentaje_coincidencias'] = 0.0
                 stats['porcentaje_no_coincidencias'] = 0.0
+            
+            # Logging para depuración
+            self.logger.info(f"Registros válidos para cálculo de porcentaje: {stats['total_registros_validos']}")
+            self.logger.info(f"Registros inválidos excluidos: {stats['total_registros_invalidos']}")
+            self.logger.info(f"Porcentaje de coincidencias (basado en registros válidos): {stats['porcentaje_coincidencias']:.2f}%")
             
             # Análisis de valores - usando la columna VALOR simplificada
             if not coincidencias.empty and 'VALOR' in coincidencias.columns:
@@ -2200,7 +2226,7 @@ class CausacionProcessor:
             
             # Resumen ejecutivo
             stats['resumen_ejecutivo'] = {
-                'total_procesado': stats['total_registros'],
+                'total_validos': stats['total_registros_validos'],
                 'coincidencias_encontradas': stats['total_coincidencias'],
                 'tasa_exito': f"{stats['porcentaje_coincidencias']:.1f}%",
                 'valor_total_coincidencias': f"${stats['valor_total_coincidencias']:,.2f}",
@@ -2669,12 +2695,14 @@ class CausacionProcessor:
             # Crear hoja de resumen básica
             if stats:
                 import pandas as pd
+                # Usar el porcentaje calculado correctamente en stats (basado en registros válidos)
+                porcentaje_matching = stats.get('porcentaje_coincidencias', 0.0)
                 summary_data = {
                     'Metric': ['Total Coincidencias', 'Total No Coincidencias', 'Tasa de Matching'],
                     'Value': [
                         len(coincidencias_df),
                         len(no_coincidencias_df),
-                        f"{(len(coincidencias_df) / (len(coincidencias_df) + len(no_coincidencias_df)) * 100):.2f}%" if (len(coincidencias_df) + len(no_coincidencias_df)) > 0 else "0%"
+                        f"{porcentaje_matching:.2f}%"
                     ]
                 }
                 summary_df = pd.DataFrame(summary_data)
@@ -2740,43 +2768,267 @@ class CausacionProcessor:
 
     def _create_simple_summary_sheet(self, writer, stats: Dict[str, Any]):
         """
-        Crear hoja de resumen simplificada con datos básicos
+        Crear hoja de resumen simple con información esencial y gráfica
         
         Args:
             writer: ExcelWriter object
             stats: Estadísticas del proceso
         """
         try:
-            # Calcular solo los datos básicos esenciales
+            # Obtener datos esenciales - solo registros válidos
             total_coincidencias = stats.get('total_coincidencias', 0)
-            total_no_coincidencias = stats.get('total_no_coincidencias', 0)
-            total_registros = total_coincidencias + total_no_coincidencias
+            total_no_coincidencias_validas = stats.get('total_no_coincidencias_validas', 0)
+            total_registros_validos = stats.get('total_registros_validos', 0)
             
-            tasa_matching = (total_coincidencias / total_registros * 100) if total_registros > 0 else 0
+            # Si no está disponible, calcularlo
+            if total_registros_validos == 0:
+                total_registros_validos = total_coincidencias + total_no_coincidencias_validas
             
-            # Datos básicos del resumen - solo lo esencial
+            # Obtener tasa de matching
+            tasa_matching = stats.get('porcentaje_coincidencias', 0.0)
+            
+            # Crear resumen simple con solo los datos esenciales
             summary_data = {
                 'Métrica': [
-                    'Total de Registros Procesados',
+                    'Total de Registros Válidos',
                     'Total de Coincidencias',
-                    'Total de No Coincidencias',
+                    'Total de No Coincidencias Válidas',
                     'Tasa de Matching (%)'
                 ],
                 'Valor': [
-                    total_registros,
+                    total_registros_validos,
                     total_coincidencias,
-                    total_no_coincidencias,
+                    total_no_coincidencias_validas,
                     f"{tasa_matching:.2f}%"
                 ]
             }
             
+            # Crear DataFrame y escribir a Excel
             summary_df = pd.DataFrame(summary_data)
             summary_df.to_excel(writer, sheet_name='Resumen', index=False)
             
-            self.logger.info("Hoja de resumen simplificada creada exitosamente")
+            # Obtener el workbook y worksheet de openpyxl para agregar gráfica y formato
+            workbook = writer.book
+            worksheet = workbook['Resumen']
+            
+            # Aplicar formato bonito
+            self._apply_beautiful_formatting(worksheet, stats)
+            
+            # Agregar gráfica
+            self._add_summary_chart(worksheet, total_coincidencias, total_no_coincidencias_validas)
+            
+            self.logger.info("Hoja de resumen con gráfica creada exitosamente")
             
         except Exception as e:
             self.logger.error(f"Error creando resumen: {e}")
+            # Intentar crear un resumen mínimo si hay error
+            try:
+                summary_data = {
+                    'Métrica': ['Total de Registros Válidos', 'Total de Coincidencias', 'Total de No Coincidencias Válidas', 'Tasa de Matching (%)'],
+                    'Valor': [0, 0, 0, '0.00%']
+                }
+                summary_df = pd.DataFrame(summary_data)
+                summary_df.to_excel(writer, sheet_name='Resumen', index=False)
+                self.logger.warning("Resumen mínimo creado debido a error")
+            except Exception as final_error:
+                self.logger.error(f"Error crítico creando resumen: {final_error}")
+    
+    def _apply_beautiful_formatting(self, worksheet, stats: Dict[str, Any]):
+        """
+        Aplicar formato bonito a la hoja de resumen
+        
+        Args:
+            worksheet: Worksheet de openpyxl
+            stats: Estadísticas del proceso
+        """
+        try:
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            
+            # Colores profesionales
+            header_color = "1F4E79"  # Azul oscuro
+            success_color = "28A745"  # Verde
+            warning_color = "FFC107"  # Amarillo
+            info_color = "17A2B8"     # Azul claro
+            light_gray = "F8F9FA"     # Gris claro
+            border_color = "D0D0D0"   # Gris para bordes
+            
+            # Estilos de fuente
+            header_font = Font(bold=True, color="FFFFFF", size=14)
+            metric_font = Font(bold=True, size=11, color="2C3E50")
+            value_font = Font(size=12, bold=True, color="1F4E79")
+            percentage_font = Font(size=12, bold=True, color="28A745")
+            
+            # Estilos de relleno
+            header_fill = PatternFill(start_color=header_color, end_color=header_color, fill_type="solid")
+            success_fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
+            warning_fill = PatternFill(start_color="FFF3E0", end_color="FFF3E0", fill_type="solid")
+            alternate_fill = PatternFill(start_color=light_gray, end_color=light_gray, fill_type="solid")
+            
+            # Estilo de borde
+            thin_border = Border(
+                left=Side(style='thin', color=border_color),
+                right=Side(style='thin', color=border_color),
+                top=Side(style='thin', color=border_color),
+                bottom=Side(style='thin', color=border_color)
+            )
+            
+            # Configurar anchos de columnas
+            worksheet.column_dimensions['A'].width = 35
+            worksheet.column_dimensions['B'].width = 25
+            worksheet.column_dimensions['C'].width = 15  # Para espacio de la gráfica
+            
+            # Formatear encabezados (fila 1)
+            for col in [1, 2]:
+                cell = worksheet.cell(row=1, column=col)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = thin_border
+            
+            # Formatear filas de datos
+            for row in range(2, 6):  # Filas 2-5 (4 métricas)
+                metric_cell = worksheet.cell(row=row, column=1)
+                value_cell = worksheet.cell(row=row, column=2)
+                
+                # Formato de métrica
+                metric_cell.font = metric_font
+                metric_cell.alignment = Alignment(horizontal="left", vertical="center")
+                metric_cell.border = thin_border
+                
+                # Formato de valor
+                value_cell.alignment = Alignment(horizontal="right", vertical="center")
+                value_cell.border = thin_border
+                
+                # Colores alternados y especiales
+                metric_text = str(metric_cell.value) if metric_cell.value else ""
+                
+                if row % 2 == 0:
+                    metric_cell.fill = alternate_fill
+                    value_cell.fill = alternate_fill
+                else:
+                    metric_cell.fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+                    value_cell.fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+                
+                # Formato especial para porcentaje
+                if 'Tasa de Matching' in metric_text:
+                    value_cell.font = percentage_font
+                    value_cell.fill = success_fill
+                    metric_cell.fill = success_fill
+                elif 'Coincidencias' in metric_text and 'No' not in metric_text:
+                    value_cell.font = Font(size=12, bold=True, color=success_color)
+                elif 'No Coincidencias' in metric_text:
+                    value_cell.font = Font(size=12, bold=True, color=warning_color)
+                else:
+                    value_cell.font = value_font
+            
+            # Ajustar altura de filas
+            worksheet.row_dimensions[1].height = 30  # Encabezado más alto
+            for row in range(2, 6):
+                worksheet.row_dimensions[row].height = 25
+            
+            self.logger.info("Formato bonito aplicado a la hoja de resumen")
+            
+        except Exception as e:
+            self.logger.warning(f"Error aplicando formato bonito: {e}")
+    
+    def _add_summary_chart(self, worksheet, total_coincidencias: int, total_no_coincidencias: int):
+        """
+        Agregar gráfica bonita a la hoja de resumen
+        
+        Args:
+            worksheet: Worksheet de openpyxl
+            total_coincidencias: Total de coincidencias
+            total_no_coincidencias: Total de no coincidencias válidas
+        """
+        try:
+            from openpyxl.chart import PieChart, Reference
+            from openpyxl.chart.series import DataPoint
+            
+            # Solo crear gráfica si hay datos
+            if total_coincidencias == 0 and total_no_coincidencias == 0:
+                return
+            
+            # Crear gráfica de pastel
+            chart = PieChart()
+            chart.title = "Distribución de Registros Válidos"
+            chart.style = 10  # Estilo moderno
+            
+            # Preparar datos para la gráfica
+            # Crear datos en celdas temporales (columna D)
+            worksheet['D1'] = 'Categoría'
+            worksheet['D2'] = 'Coincidencias'
+            worksheet['D3'] = 'No Coincidencias'
+            
+            worksheet['E1'] = 'Cantidad'
+            worksheet['E2'] = total_coincidencias
+            worksheet['E3'] = total_no_coincidencias
+            
+            # Referencias para la gráfica
+            data = Reference(worksheet, min_col=5, min_row=1, max_row=3)
+            cats = Reference(worksheet, min_col=4, min_row=2, max_row=3)
+            
+            chart.add_data(data, titles_from_data=True)
+            chart.set_categories(cats)
+            
+            # Colores personalizados (verde para coincidencias, amarillo para no coincidencias)
+            chart.dataLabels = True
+            chart.dataLabels.showPercent = True
+            chart.dataLabels.showCategoryName = True
+            chart.dataLabels.showLeaderLines = True
+            
+            # Posicionar la gráfica a la derecha de los datos
+            chart.width = 12
+            chart.height = 8
+            chart.anchor = "D2"  # Empezar en columna D, fila 2
+            
+            # Agregar la gráfica al worksheet
+            worksheet.add_chart(chart, "D2")
+            
+            # Ocultar las celdas temporales (opcional, hacerlas pequeñas)
+            worksheet.column_dimensions['D'].width = 0.1
+            worksheet.column_dimensions['E'].width = 0.1
+            
+            self.logger.info("Gráfica agregada exitosamente a la hoja de resumen")
+            
+        except Exception as e:
+            self.logger.warning(f"Error agregando gráfica: {e}")
+            # Intentar con gráfica de barras como alternativa
+            try:
+                from openpyxl.chart import BarChart, Reference
+                
+                chart = BarChart()
+                chart.type = "col"
+                chart.style = 10
+                chart.title = "Distribución de Registros"
+                chart.y_axis.title = 'Cantidad'
+                chart.x_axis.title = 'Categoría'
+                
+                # Preparar datos
+                worksheet['D1'] = 'Categoría'
+                worksheet['D2'] = 'Coincidencias'
+                worksheet['D3'] = 'No Coincidencias'
+                
+                worksheet['E1'] = 'Cantidad'
+                worksheet['E2'] = total_coincidencias
+                worksheet['E3'] = total_no_coincidencias
+                
+                data = Reference(worksheet, min_col=5, min_row=1, max_row=3)
+                cats = Reference(worksheet, min_col=4, min_row=2, max_row=3)
+                
+                chart.add_data(data, titles_from_data=True)
+                chart.set_categories(cats)
+                
+                chart.width = 12
+                chart.height = 8
+                chart.anchor = "D2"
+                
+                worksheet.add_chart(chart, "D2")
+                worksheet.column_dimensions['D'].width = 0.1
+                worksheet.column_dimensions['E'].width = 0.1
+                
+                self.logger.info("Gráfica de barras agregada como alternativa")
+            except Exception as alt_error:
+                self.logger.error(f"Error agregando gráfica alternativa: {alt_error}")
 
     def _create_simple_metadata_sheet(self, writer):
         """
@@ -2912,12 +3164,12 @@ class CausacionProcessor:
                 table_name = f"Tabla{sheet_name.replace('_', '')}"  # Eliminar caracteres especiales
                 table = Table(displayName=table_name, ref=table_range)
                 
-                # Aplicar estilo de tabla
+                # Aplicar estilo de tabla más bonito
                 style = TableStyleInfo(
-                    name="TableStyleMedium9",  # Estilo azul profesional
+                    name="TableStyleMedium2",  # Estilo moderno con colores suaves
                     showFirstColumn=False,
                     showLastColumn=False,
-                    showRowStripes=True,
+                    showRowStripes=True,  # Filas alternadas
                     showColumnStripes=False
                 )
                 table.tableStyleInfo = style
@@ -2925,12 +3177,26 @@ class CausacionProcessor:
                 # Agregar la tabla a la hoja
                 worksheet.add_table(table)
                 
-                # Aplicar formato adicional a los encabezados
-                from openpyxl.styles import Font, PatternFill, Alignment
+                # Aplicar formato adicional bonito a los encabezados y datos
+                from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
                 
-                header_font = Font(bold=True, color="FFFFFF")
-                header_fill = PatternFill(start_color="2E5984", end_color="2E5984", fill_type="solid")
+                # Colores profesionales
+                header_color = "1F4E79"  # Azul oscuro
+                light_gray = "F8F9FA"   # Gris claro
+                border_color = "D0D0D0"  # Gris para bordes
+                
+                header_font = Font(bold=True, color="FFFFFF", size=11)
+                header_fill = PatternFill(start_color=header_color, end_color=header_color, fill_type="solid")
                 header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                
+                data_font = Font(size=10)
+                alternate_fill = PatternFill(start_color=light_gray, end_color=light_gray, fill_type="solid")
+                thin_border = Border(
+                    left=Side(style='thin', color=border_color),
+                    right=Side(style='thin', color=border_color),
+                    top=Side(style='thin', color=border_color),
+                    bottom=Side(style='thin', color=border_color)
+                )
                 
                 # Aplicar formato a la fila de encabezados
                 for col_idx in range(1, len(df.columns) + 1):
@@ -2938,6 +3204,34 @@ class CausacionProcessor:
                     cell.font = header_font
                     cell.fill = header_fill
                     cell.alignment = header_alignment
+                    cell.border = thin_border
+                
+                # Aplicar formato a las filas de datos (filas alternadas)
+                for row_idx in range(2, len(df) + 2):
+                    for col_idx in range(1, len(df.columns) + 1):
+                        cell = worksheet.cell(row=row_idx, column=col_idx)
+                        cell.font = data_font
+                        cell.border = thin_border
+                        
+                        # Filas alternadas
+                        if row_idx % 2 == 0:
+                            cell.fill = alternate_fill
+                        else:
+                            cell.fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+                        
+                        # Alineación especial para columnas numéricas
+                        col_name = df.columns[col_idx - 1] if col_idx <= len(df.columns) else ""
+                        if 'VALOR' in col_name.upper() or 'DIFERENCIA' in col_name.upper():
+                            cell.alignment = Alignment(horizontal="right", vertical="center")
+                        elif 'FECHA' in col_name.upper():
+                            cell.alignment = Alignment(horizontal="center", vertical="center")
+                        else:
+                            cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                
+                # Ajustar altura de filas
+                worksheet.row_dimensions[1].height = 25  # Encabezado más alto
+                for row_idx in range(2, len(df) + 2):
+                    worksheet.row_dimensions[row_idx].height = 20
                 
                 self.logger.info(f"Tabla creada para {sheet_name} con rango {table_range}")
             
@@ -3038,6 +3332,28 @@ class CausacionProcessor:
                     cell_b.font = section_font
                     cell_b.fill = section_fill
                     cell_b.alignment = Alignment(horizontal="center", vertical="center")
+                    # Combinar celdas para el encabezado de sección
+                    try:
+                        worksheet.merge_cells(f'A{row}:B{row}')
+                    except:
+                        pass
+                elif metric_text.startswith('  -'):
+                    # Es una sub-métrica (indentada)
+                    cell_a.font = Font(size=9, italic=True)
+                    cell_a.alignment = Alignment(horizontal="left", vertical="center", indent=2)
+                    cell_b.font = Font(size=9)
+                    cell_b.alignment = Alignment(horizontal="right", vertical="center")
+                elif metric_text.startswith('•'):
+                    # Es una nota
+                    cell_a.font = Font(size=9, italic=True, color="666666")
+                    cell_a.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                    cell_b.font = Font(size=9, italic=True, color="666666")
+                    cell_b.alignment = Alignment(horizontal="left", vertical="center")
+                    # Combinar celdas para las notas
+                    try:
+                        worksheet.merge_cells(f'A{row}:B{row}')
+                    except:
+                        pass
                 elif metric_text.strip() == "":
                     # Es una fila separadora vacía
                     cell_a.fill = PatternFill(start_color="F8F8F8", end_color="F8F8F8", fill_type="solid")
@@ -3046,7 +3362,21 @@ class CausacionProcessor:
                     # Es una fila de datos normal
                     cell_a.font = data_font
                     cell_a.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-                    cell_b.font = value_font
+                    
+                    # Formato especial para valores según el contenido
+                    value_text = str(cell_b.value) if cell_b.value else ""
+                    if '$' in value_text or 'Valor' in metric_text:
+                        # Valores monetarios
+                        cell_b.font = Font(size=10, bold=True, color="1F4E79")
+                    elif '%' in value_text or 'Tasa' in metric_text or 'Porcentaje' in metric_text:
+                        # Porcentajes
+                        cell_b.font = Font(size=10, bold=True, color="2E5984")
+                    elif value_text.replace(',', '').replace('.', '').isdigit():
+                        # Números simples
+                        cell_b.font = value_font
+                    else:
+                        cell_b.font = value_font
+                    
                     cell_b.alignment = Alignment(horizontal="right", vertical="center")
                     
                     # Colorear filas alternas para mejor legibilidad
@@ -3266,9 +3596,9 @@ class CausacionProcessor:
         # Escribir solo estadísticas básicas
         start_row = 4
         summary_data = [
-            ('Total de registros procesados', stats['total_registros']),
+            ('Total de registros válidos', stats.get('total_registros_validos', stats['total_registros'])),
             ('Coincidencias encontradas', stats['total_coincidencias']),
-            ('No coincidencias', stats['total_no_coincidencias']),
+            ('No coincidencias válidas', stats.get('total_no_coincidencias_validas', stats['total_no_coincidencias'])),
             ('Tasa de Matching (%)', f"{stats['porcentaje_coincidencias']:.2f}%")
         ]
         
