@@ -486,9 +486,14 @@ class ProcessingThread(QThread):
                 stats=stats
             )
             
-            self.progress.emit(f"Archivo Excel creado: {Path(excel_path).name}")
+            excel_path_obj = Path(excel_path)
+            self.progress.emit(f"Archivo Excel creado: {excel_path_obj.name}")
             
             # Mensaje de éxito con estadísticas
+            import sys
+            is_executable = getattr(sys, 'frozen', False)
+            location_text = f"\n- Ubicación: {excel_path_obj.parent}" if is_executable else ""
+            
             success_message = (
                 f"Procesamiento de causación completado exitosamente\n\n"
                 f"Resumen:\n"
@@ -496,7 +501,7 @@ class ProcessingThread(QThread):
                 f"- Coincidencias: {stats['total_coincidencias']} ({stats['porcentaje_coincidencias']:.1f}%)\n"
                 f"- No coincidencias: {stats['total_no_coincidencias']} ({stats['porcentaje_no_coincidencias']:.1f}%)\n"
                 f"- Calidad general: {stats['resumen_ejecutivo']['calidad_general']}\n"
-                f"- Archivo generado: {Path(excel_path).name}"
+                f"- Archivo generado: {excel_path_obj.name}{location_text}"
             )
             
             self.finished.emit(True, success_message, stats)
